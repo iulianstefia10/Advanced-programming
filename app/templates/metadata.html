@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="text-center mb-4">
+    <h1 class="display-5 fw-bold text-white">Database Structure <span class="text-accent">Chinook</span></h1>
+    <p class="text-muted-custom">Description of tables and their columns.</p>
+</div>
+
+<div class="row g-4 justify-content-center">
+    {% for table_name, columns in tables.items() %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-header text-center">
+                {{ table_name }}
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for col in columns %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">{{ col.name }}</span>
+                    <span class="badge bg-secondary rounded-pill">{{ col.type }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

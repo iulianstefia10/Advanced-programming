@@ -1,0 +1,25 @@
+services:
+  flask-app:
+    build: .
+    ports:
+      - "5004:5004"
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=development 
+    volumes:
+      - .:/app
+    command: python app.py
+    networks:
+      - flask-network
+    container_name: group4
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: group4
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: flask_models
+
+networks:
+  flask-network:
+    driver: bridge  

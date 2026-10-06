@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="text-center mb-5">
+    <h1 class="display-5 fw-bold text-white">Music Database <span class="text-accent">Analytics</span></h1>
+    <p class="text-muted-custom">Select a report to view the data.</p>
+</div>
+
+<div class="row g-4 justify-content-center">
+    <div class="col-md-5">
+        <div class="card h-100 text-center p-4">
+            <h4 class="mb-3 text-white">Top 10 Artists</h4>
+            <p class="text-light-custom small">Most popular artists by total sales.</p>
+            <a href="/popular_artists" class="btn btn-custom mt-auto w-50 mx-auto">View Report</a>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card h-100 text-center p-4">
+            <h4 class="mb-3 text-white">Top 10 Customers</h4>
+            <p class="text-light-custom small">Customers with the highest spending.</p>
+            <a href="/top_customers" class="btn btn-custom mt-auto w-50 mx-auto">View Report</a>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card h-100 text-center p-4">
+            <h4 class="mb-3 text-white">Genre Statistics</h4>
+            <p class="text-light-custom small">Chart and number of tracks per genre.</p>
+            <a href="/genres_stats" class="btn btn-custom mt-auto w-50 mx-auto">View Report</a>
+        </div>
+    </div>
+    <div class="col-md-5">
+        <div class="card h-100 text-center p-4">
+            <h4 class="mb-3 text-white">Artist Albums</h4>
+            <p class="text-light-custom small">Total number of albums for each artist.</p>
+            <a href="/albums_per_artist" class="btn btn-custom mt-auto w-50 mx-auto">View Report</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
