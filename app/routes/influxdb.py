@@ -1,10 +1,19 @@
-from flask import Blueprint, current_app
+from flask import Blueprint, current_app, render_template
 
-influx_bp = Blueprint("influxdb", __name__)
+
+influx_bp = Blueprint(
+    "influxdb",
+    __name__,
+    url_prefix="/influxdb"
+)
 
 
 def get_influxdb():
     return current_app.extensions["influxdb"]
+
+@influx_bp.route("/")
+def dashboard():
+    return render_template("influx_dashboard.html")
 
 
 @influx_bp.route("/ping")

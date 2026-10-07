@@ -15,7 +15,11 @@ from models.chinook import (
     InvoiceLine
 )
 
-chinook_bp = Blueprint("chinook", __name__)
+chinook_bp = Blueprint(
+    "chinook",
+    __name__,
+    url_prefix="/chinook"
+)
 
 
 @chinook_bp.route('/artists')
@@ -41,7 +45,7 @@ def artists_with_albums():
     )
 
 
-@chinook_bp.route('/dashboard')
+@chinook_bp.route('/')
 def dashboard():
     return render_template('dashboard.html')
 

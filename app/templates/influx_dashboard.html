@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}
+InfluxDB · Analytics
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-activity"></i>
+        INFLUXDB
+    </div>
+
+    <h1>
+        Time-Series <span>Data.</span>
+    </h1>
+
+    <p>
+        Explore weather measurements, database buckets,
+        fields and time-series information.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    <div class="row g-4">
+
+        <div class="col-md-6 col-lg-3">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-cloud-sun"></i>
+                </div>
+
+                <h3>Weather</h3>
+
+                <p>
+                    Explore recent weather measurements.
+                </p>
+
+                <a href="/influxdb/weather" class="btn-modern">
+                    View Weather
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-6 col-lg-3">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-database"></i>
+                </div>
+
+                <h3>Buckets</h3>
+
+                <p>
+                    Browse available InfluxDB buckets.
+                </p>
+
+                <a href="/influxdb/buckets" class="btn-modern">
+                    View Buckets
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-6 col-lg-3">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+
+                <h3>Measurements</h3>
+
+                <p>
+                    Explore available measurements.
+                </p>
+
+                <a href="/influxdb/measurements" class="btn-modern">
+                    View Measurements
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="col-md-6 col-lg-3">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-list-columns"></i>
+                </div>
+
+                <h3>Fields</h3>
+
+                <p>
+                    Explore available measurement fields.
+                </p>
+
+                <a href="/influxdb/fields" class="btn-modern">
+                    View Fields
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}
