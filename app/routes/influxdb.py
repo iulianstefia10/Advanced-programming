@@ -1,36 +1,26 @@
-from flask import Flask
-from influxdb_flask import InfluxDB
+from flask import Blueprint, current_app
+
+influx_bp = Blueprint("influxdb", __name__)
 
 
-# CREATE FLASK APP
+def get_influxdb():
+    return current_app.extensions["influxdb"]
 
-app = Flask(__name__)
 
-
-# 7.1 CONNECT TO INFLUXDB
-app.config["INFLUXDB_V2_URL"] = "http://192.168.168.88:8086"
-app.config["INFLUXDB_V2_ORG"] = "iut"
-app.config["INFLUXDB_V2_TOKEN"] = "AryKbDs91bu2VoKtFsVHF8_eSoQK4c_s-WEPkA5wXXX80lzcJtuu9k8AKDOMvrty-E3n9JsdqMWhC89y8e-K_A=="
-
-influxdb = InfluxDB(app)
-
-# 7.1 PING DATABASE
-@app.route("/ping")
+@influx_bp.route("/ping")
 def ping():
+    influxdb = get_influxdb()
 
     response = influxdb.connection.ping()
 
-    return {
-        "connected": response
-    }
+    return {"connected": response}
 
 
-# 7.2 GET AVAILABLE BUCKETS
-@app.route("/buckets")
+@influx_bp.route("/buckets")
 def buckets():
+    influxdb = get_influxdb()
 
     buckets_api = influxdb.connection.buckets_api()
-
     buckets = buckets_api.find_buckets().buckets
 
     return {
@@ -38,13 +28,13 @@ def buckets():
     }
 
 
-# 7.2 GET WEATHER TIME SERIES
-@app.route("/weather")
+@influx_bp.route("/weather")
 def weather():
+    influxdb = get_influxdb()
 
     query_api = influxdb.connection.query_api()
 
-    org = app.config["INFLUXDB_V2_ORG"]
+    org = current_app.config["INFLUXDB_V2_ORG"]
 
     flux_query = '''
     from(bucket: "weather")
@@ -59,29 +49,31 @@ def weather():
         query=flux_query
     )
 
-    data = []
-    time = []
+    data = [
+        record.values["_value"]
+        for table in tables
+        for record in table.records
+    ]
 
-    for table in tables:
-        for record in table.records:
-            data.append(record.values["_value"])
-            time.append(str(record.values["_time"]))
+    time = [
+        record.values["_time"]
+        for table in tables
+        for record in table.records
+    ]
 
     return {
         "data": data,
-        "time": time
+        "time": [str(t) for t in time]
     }
 
 
-
-# 7.3 GET MEASUREMENTS nm
-
-@app.route("/measurements")
+@influx_bp.route("/measurements")
 def measurements():
+    influxdb = get_influxdb()
 
     query_api = influxdb.connection.query_api()
 
-    org = app.config["INFLUXDB_V2_ORG"]
+    org = current_app.config["INFLUXDB_V2_ORG"]
 
     flux_query = '''
     import "influxdata/influxdb/schema"
@@ -104,14 +96,14 @@ def measurements():
         "measurements": meas_list
     }
 
-# 7.3 GET FIELDS
 
-@app.route("/fields")
+@influx_bp.route("/fields")
 def fields():
+    influxdb = get_influxdb()
 
     query_api = influxdb.connection.query_api()
 
-    org = app.config["INFLUXDB_V2_ORG"]
+    org = current_app.config["INFLUXDB_V2_ORG"]
 
     flux_query = '''
     import "influxdata/influxdb/schema"
@@ -133,45 +125,3 @@ def fields():
     return {
         "fields": field_list
     }
-
-
-# 7.4 FORMAT DATASET
-
-def format_dataset(data, x):
-
-    X = []
-    y = []
-
-    for i in range(len(data) - 2 * x + 1):
-
-        X.append(data[i:i + x])
-
-        y.append(data[i + x:i + 2 * x])
-
-    return X, y
-
-# TEST 7.4 sliding wind
-@app.route("/format")
-def format_test():
-
-    data = [1, 2, 3, 4, 5, 6, 7, 8]
-
-    x = 3
-
-    X, y = format_dataset(data, x)
-
-    return {
-        "X": X,
-        "y": y
-    }
-
-
-# START SERVER
-
-if __name__ == "__main__":
-
-    app.run(
-        host="0.0.0.0",
-        port=5004,
-        debug=True
-    )

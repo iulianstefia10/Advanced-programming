@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, ForeignKey, Numeric
 
-from app import db
+from extensions import db
 
 class Artist(db.Model):
     __tablename__ = 'Artist'
