@@ -4,7 +4,9 @@ from influxdb_flask import InfluxDB
 import os
 
 from extensions import db
+from dotenv import load_dotenv
 
+load_dotenv()
 
 def create_app():
 
@@ -32,7 +34,7 @@ def create_app():
 
     app.config["INFLUXDB_V2_ORG"] = "iut"
 
-    app.config["INFLUXDB_V2_TOKEN"] = "AryKbDs91bu2VoKtFsVHF8_eSoQK4c_s-WEPkA5wXXX80lzcJtuu9k8AKDOMvrty-E3n9JsdqMWhC89y8e-K_A=="
+    app.config["INFLUXDB_V2_TOKEN"] = os.environ.get("INFLUXDB_V2_TOKEN")
 
     influxdb = InfluxDB(app)
     app.extensions["influxdb"] = influxdb
