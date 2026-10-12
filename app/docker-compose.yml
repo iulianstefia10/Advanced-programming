@@ -1,11 +1,16 @@
+
 services:
   flask-app:
-    build: .
+    build:
+      context: ..
+      dockerfile: app/Dockerfile
     ports:
       - "5004:5004"
     environment:
       - FLASK_APP=app.py
-      - FLASK_ENV=development 
+      - FLASK_ENV=development
+      - INFLUXDB_V2_ORG=${INFLUXDB_V2_ORG}
+      - INFLUXDB_V2_TOKEN=${INFLUXDB_V2_TOKEN}
     volumes:
       - .:/app
     command: python app.py
@@ -19,7 +24,9 @@ services:
       POSTGRES_USER: group4
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: flask_models
+    networks:
+      - flask-network
 
 networks:
   flask-network:
-    driver: bridge  
+    driver: bridge

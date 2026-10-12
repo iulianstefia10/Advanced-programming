@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}
+Connection · InfluxDB
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-activity"></i>
+        INFLUXDB
+    </div>
+
+    <h1>
+        Connection <span>Status.</span>
+    </h1>
+
+    <p>
+        Check whether the application can communicate
+        with the InfluxDB server.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    <div class="influx-status-card">
+
+        {% if connected %}
+
+            <div class="status-circle connected">
+                <i class="bi bi-check-lg"></i>
+            </div>
+
+            <div class="status-badge">
+                ONLINE
+            </div>
+
+            <h2>InfluxDB is connected</h2>
+
+            <p>
+                The connection to the InfluxDB server
+                is working correctly.
+            </p>
+
+        {% else %}
+
+            <div class="status-circle disconnected">
+                <i class="bi bi-x-lg"></i>
+            </div>
+
+            <div class="status-badge disconnected">
+                OFFLINE
+            </div>
+
+            <h2>InfluxDB is unavailable</h2>
+
+            <p>
+                The application could not establish
+                a connection to the InfluxDB server.
+            </p>
+
+        {% endif %}
+
+    </div>
+
+
+    <div class="influx-info-grid">
+
+        <div class="influx-info-card">
+
+            <i class="bi bi-server"></i>
+
+            <span>SERVER</span>
+
+            <strong>InfluxDB</strong>
+
+        </div>
+
+
+        <div class="influx-info-card">
+
+            <i class="bi bi-activity"></i>
+
+            <span>STATUS</span>
+
+            <strong>
+                {% if connected %}
+                    Operational
+                {% else %}
+                    Unavailable
+                {% endif %}
+            </strong>
+
+        </div>
+
+
+        <div class="influx-info-card">
+
+            <i class="bi bi-link-45deg"></i>
+
+            <span>ENDPOINT</span>
+
+            <strong>/influxdb/ping</strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="{{ url_for('influxdb.dashboard') }}"
+           class="btn-outline-modern">
+
+            <i class="bi bi-arrow-left"></i>
+            Back to InfluxDB
+
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}

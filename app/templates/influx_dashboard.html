@@ -19,18 +19,17 @@ InfluxDB · Analytics
 
     <p>
         Explore weather measurements, database buckets,
-        fields and time-series information.
+        fields, connection status and time-series formatting.
     </p>
 
 </section>
-
 
 <section class="container pb-5">
 
     <div class="row g-4">
 
-        <div class="col-md-6 col-lg-3">
-
+        <!-- Weather -->
+        <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
@@ -40,21 +39,20 @@ InfluxDB · Analytics
                 <h3>Weather</h3>
 
                 <p>
-                    Explore recent weather measurements.
+                    Explore recent weather measurements and
+                    temperature history for Annecy.
                 </p>
 
-                <a href="/influxdb/weather" class="btn-modern">
+                <a href="{{ url_for('influxdb.weather') }}" class="btn-modern">
                     View Weather
                     <i class="bi bi-arrow-right"></i>
                 </a>
 
             </div>
-
         </div>
 
-
-        <div class="col-md-6 col-lg-3">
-
+        <!-- Buckets -->
+        <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
@@ -64,21 +62,20 @@ InfluxDB · Analytics
                 <h3>Buckets</h3>
 
                 <p>
-                    Browse available InfluxDB buckets.
+                    Browse the InfluxDB buckets available
+                    to your access token.
                 </p>
 
-                <a href="/influxdb/buckets" class="btn-modern">
+                <a href="{{ url_for('influxdb.buckets') }}" class="btn-modern">
                     View Buckets
                     <i class="bi bi-arrow-right"></i>
                 </a>
 
             </div>
-
         </div>
 
-
-        <div class="col-md-6 col-lg-3">
-
+        <!-- Measurements -->
+        <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
@@ -88,21 +85,20 @@ InfluxDB · Analytics
                 <h3>Measurements</h3>
 
                 <p>
-                    Explore available measurements.
+                    Explore the measurements stored
+                    in your InfluxDB buckets.
                 </p>
 
-                <a href="/influxdb/measurements" class="btn-modern">
+                <a href="{{ url_for('influxdb.measurements') }}" class="btn-modern">
                     View Measurements
                     <i class="bi bi-arrow-right"></i>
                 </a>
 
             </div>
-
         </div>
 
-
-        <div class="col-md-6 col-lg-3">
-
+        <!-- Fields -->
+        <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
@@ -112,28 +108,71 @@ InfluxDB · Analytics
                 <h3>Fields</h3>
 
                 <p>
-                    Explore available measurement fields.
+                    Inspect available field keys returned
+                    by the InfluxDB schema query.
                 </p>
 
-                <a href="/influxdb/fields" class="btn-modern">
+                <a href="{{ url_for('influxdb.fields') }}" class="btn-modern">
                     View Fields
                     <i class="bi bi-arrow-right"></i>
                 </a>
 
             </div>
+        </div>
 
+        <!-- Connection Status -->
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-activity"></i>
+                </div>
+
+                <h3>Connection Status</h3>
+
+                <p>
+                    Check connectivity and verify that
+                    the InfluxDB server responds.
+                </p>
+
+                <a href="{{ url_for('influxdb.ping') }}" class="btn-modern">
+                    Check Connection
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+        <!-- Dataset Formatting -->
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-grid-3x3"></i>
+                </div>
+
+                <h3>Dataset Formatting</h3>
+
+                <p>
+                    Transform time-series observations into
+                    input windows and prediction targets.
+                </p>
+
+                <a href="{{ url_for('influxdb.format_test') }}" class="btn-modern">
+                    Explore Dataset
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
         </div>
 
     </div>
 
-
     <div class="text-center mt-5">
-
-        <a href="/" class="btn-outline-modern">
+        <a href="{{ url_for('home') }}" class="btn-outline-modern">
             <i class="bi bi-arrow-left"></i>
             Back to DataHub
         </a>
-
     </div>
 
 </section>

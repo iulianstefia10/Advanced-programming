@@ -1,27 +1,177 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="text-center mb-4">
-    <h1 class="display-5 fw-bold text-white">Database Structure <span class="text-accent">Chinook</span></h1>
-    <p class="text-muted-custom">Description of tables and their columns.</p>
-</div>
 
-<div class="row g-4 justify-content-center">
-    {% for table_name, columns in tables.items() %}
-    <div class="col-md-6 col-lg-4">
-        <div class="card h-100">
-            <div class="card-header text-center">
-                {{ table_name }}
-            </div>
-            <ul class="list-group list-group-flush">
-                {% for col in columns %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span class="fw-bold">{{ col.name }}</span>
-                    <span class="badge bg-secondary rounded-pill">{{ col.type }}</span>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
+{% block title %}
+Chinook · Database Structure
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+    <div class="hero-badge">
+        <i class="bi bi-diagram-3"></i>
+        CHINOOK DATABASE
     </div>
-    {% endfor %}
-</div>
+
+    <h1>
+        Database <span>Structure.</span>
+    </h1>
+
+    <p>
+        Explore the tables, columns and data types
+        that define the Chinook database.
+    </p>
+
+        <div class="text-center mt-5">
+        <a href="/chinook/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to Chinook Analytics
+        </a>
+    </div>
+</section>
+
+<section class="container pb-5">
+
+    <!-- Database overview -->
+    <div class="row g-4 mb-4">
+
+        <div class="col-md-6">
+            <div class="database-card overview-card">
+                <i class="bi bi-table overview-icon"></i>
+                <div>
+                    <p class="overview-label">Total Tables</p>
+                    <h2>{{ tables|length }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="database-card overview-card">
+                <i class="bi bi-list-columns overview-icon"></i>
+                <div>
+                    <p class="overview-label">Total Columns</p>
+                    <h2>
+                        {% set ns = namespace(total=0) %}
+                        {% for columns in tables.values() %}
+                            {% set ns.total = ns.total + columns|length %}
+                        {% endfor %}
+                        {{ ns.total }}
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Search -->
+    <div class="metadata-search mb-4">
+        <i class="bi bi-search"></i>
+        <input
+            type="text"
+            id="metadataSearch"
+            class="form-control"
+            placeholder="Search tables, columns or data types..."
+            aria-label="Search database structure"
+        >
+    </div>
+
+        
+
+    <!-- Tables -->
+    <div class="row g-4" id="metadataTables">
+
+        {% for table_name, columns in tables.items() %}
+        <div
+            class="col-md-6 col-lg-4 metadata-table-wrapper"
+            data-table="{{ table_name|lower }}"
+        >
+            <div class="database-card metadata-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-table"></i>
+                </div>
+
+                <h3>{{ table_name }}</h3>
+
+                <p class="metadata-count">
+                    {{ columns|length }} columns
+                </p>
+
+                <div class="metadata-columns">
+                    {% for col in columns %}
+                    <div
+                        class="metadata-column"
+                        data-search="{{ (col.name ~ ' ' ~ col.type)|lower }}"
+                    >
+                        <span class="metadata-column-name">
+                            <i class="bi bi-code-square"></i>
+                            {{ col.name }}
+                        </span>
+
+                        <span class="metadata-column-type">
+                            {{ col.type }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+
+    <p id="noMetadataResults" class="text-center mt-4" hidden>
+        No matching tables or columns found.
+    </p>
+
+</section>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const searchInput = document.getElementById("metadataSearch");
+        const tableWrappers = document.querySelectorAll(
+            ".metadata-table-wrapper"
+        );
+        const noResults = document.getElementById("noMetadataResults");
+
+        searchInput.addEventListener("input", function () {
+            const query = this.value.trim().toLowerCase();
+            let visibleTables = 0;
+
+            tableWrappers.forEach(function (wrapper) {
+                const tableName = wrapper.dataset.table;
+                const columns = wrapper.querySelectorAll(".metadata-column");
+                let matchingColumns = 0;
+
+                columns.forEach(function (column) {
+                    const columnText = column.dataset.search;
+                    const matches =
+                        !query ||
+                        tableName.includes(query) ||
+                        columnText.includes(query);
+
+                    column.hidden = !matches;
+
+                    if (matches) {
+                        matchingColumns++;
+                    }
+                });
+
+                const tableMatches =
+                    !query ||
+                    tableName.includes(query) ||
+                    matchingColumns > 0;
+
+                wrapper.hidden = !tableMatches;
+
+                if (tableMatches) {
+                    visibleTables++;
+                }
+            });
+
+            noResults.hidden = visibleTables > 0;
+        });
+    });
+</script>
+
 {% endblock %}

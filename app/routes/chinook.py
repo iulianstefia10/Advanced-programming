@@ -1,5 +1,10 @@
-from flask import Blueprint, render_template
-from sqlalchemy import func
+
+from flask import Blueprint, render_template, jsonify
+from sqlalchemy import func, inspect
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import io
 import base64
@@ -12,175 +17,274 @@ from models.chinook import (
     Track,
     Customer,
     Invoice,
-    InvoiceLine
+    InvoiceLine,
 )
 
 chinook_bp = Blueprint(
     "chinook",
     __name__,
-    url_prefix="/chinook"
+    url_prefix="/chinook",
 )
 
 
-@chinook_bp.route('/artists')
+@chinook_bp.route("/")
+def dashboard():
+    return render_template("chinook_dashboard.html")
+
+
+@chinook_bp.route("/artists")
 def artists():
-    artist_list = Artist.query.all()
-    return f"<h1>List of Artists ({len(artist_list)})</h1>" + \
-           "<br>".join([a.Name for a in artist_list if a.Name])
+    artist_list = Artist.query.order_by(Artist.Name).all()
 
+    items = [
+        {"name": artist.Name, "value": ""}
+        for artist in artist_list
+        if artist.Name
+    ]
 
-@chinook_bp.route('/albums')
-def albums():
-    album_list = Album.query.all()
-    return f"<h1>List of Albums ({len(album_list)})</h1>" + \
-           "<br>".join([a.Title for a in album_list])
-
-
-@chinook_bp.route('/artists_with_albums')
-def artists_with_albums():
-    artist_list = Artist.query.join(Album).all()
     return render_template(
-        'artists_with_albums.html',
-        artists=artist_list
+        "data_list.html",
+        title="Artists",
+        items=items,
+        total_count=len(artist_list),
     )
 
 
-@chinook_bp.route('/')
-def dashboard():
-    return render_template('dashboard.html')
-
-
-@chinook_bp.route('/albums_per_artist')
-def albums_per_artist():
-    data = db.session.query(
-        Artist.Name,
-        func.count(Album.AlbumId).label('album_count')
-    ).outerjoin(Album) \
-     .group_by(Artist.ArtistId) \
-     .order_by(db.desc('album_count')).all()
+@chinook_bp.route("/albums")
+def albums():
+    album_list = Album.query.order_by(Album.Title).all()
 
     items = [
-        {"name": name, "value": f"{count} Albums"}
+        {"name": album.Title, "value": ""}
+        for album in album_list
+        if album.Title
+    ]
+
+    return render_template(
+        "data_list.html",
+        title="Albums",
+        items=items,
+        total_count=len(album_list),
+    )
+
+
+@chinook_bp.route("/artists_with_albums")
+def artists_with_albums():
+    data = (
+        db.session.query(Artist.Name, Album.Title)
+        .join(Album, Album.ArtistId == Artist.ArtistId)
+        .order_by(Artist.Name, Album.Title)
+        .all()
+    )
+
+    items = [
+        {
+            "name": artist_name or "Unknown artist",
+            "value": album_title or "Untitled album",
+        }
+        for artist_name, album_title in data
+    ]
+
+    return render_template(
+        "data_list.html",
+        title="Artists with Albums",
+        items=items,
+        total_count=len(items),
+    )
+
+
+@chinook_bp.route("/albums_per_artist")
+def albums_per_artist():
+    data = (
+        db.session.query(
+            Artist.Name,
+            func.count(Album.AlbumId).label("album_count"),
+        )
+        .outerjoin(Album, Album.ArtistId == Artist.ArtistId)
+        .group_by(Artist.ArtistId, Artist.Name)
+        .order_by(func.count(Album.AlbumId).desc(), Artist.Name)
+        .all()
+    )
+
+    items = [
+        {
+            "name": name or "Unknown artist",
+            "value": f"{count} Albums",
+        }
         for name, count in data
     ]
 
     return render_template(
-        'data_list.html',
+        "data_list.html",
         title="Albums per Artist",
-        items=items
+        items=items,
+        total_count=len(items),
     )
 
 
-@chinook_bp.route('/popular_artists')
+@chinook_bp.route("/popular_artists")
 def popular_artists():
-    data = db.session.query(
-        Artist.Name,
-        func.sum(
-            InvoiceLine.UnitPrice * InvoiceLine.Quantity
-        ).label('sales')
-    ).join(Album) \
-     .join(Track) \
-     .join(InvoiceLine) \
-     .group_by(Artist.Name) \
-     .order_by(db.desc('sales')) \
-     .limit(10).all()
+    sales = func.sum(
+        InvoiceLine.UnitPrice * InvoiceLine.Quantity
+    ).label("sales")
 
-    items = [
-        {"name": name, "value": f"${sales:.2f}"}
-        for name, sales in data
-    ]
-
-    return render_template(
-        'data_list.html',
-        title="Top 10 Popular Artists (By Sales)",
-        items=items
+    data = (
+        db.session.query(Artist.Name, sales)
+        .join(Album, Album.ArtistId == Artist.ArtistId)
+        .join(Track, Track.AlbumId == Album.AlbumId)
+        .join(InvoiceLine, InvoiceLine.TrackId == Track.TrackId)
+        .group_by(Artist.ArtistId, Artist.Name)
+        .order_by(sales.desc())
+        .limit(10)
+        .all()
     )
-
-
-@chinook_bp.route('/top_customers')
-def top_customers():
-    data = db.session.query(
-        Customer.FirstName,
-        Customer.LastName,
-        func.sum(Invoice.Total).label('spent')
-    ).join(Invoice) \
-     .group_by(Customer.CustomerId) \
-     .order_by(db.desc('spent')) \
-     .limit(10).all()
 
     items = [
         {
-            "name": f"{fname} {lname}",
-            "value": f"${spent:.2f}"
+            "name": name or "Unknown artist",
+            "value": f"${float(total or 0):.2f}",
         }
-        for fname, lname, spent in data
+        for name, total in data
     ]
 
     return render_template(
-        'data_list.html',
-        title="Top 10 Spenders",
-        items=items
+        "data_list.html",
+        title="Top 10 Popular Artists (By Sales)",
+        items=items,
+        total_count=len(items),
     )
 
 
-@chinook_bp.route('/genres_stats')
-def genres_stats():
-    data = db.session.query(
-        Genre.Name,
-        func.count(Track.TrackId).label('track_count')
-    ).join(Track) \
-     .group_by(Genre.GenreId) \
-     .order_by(db.desc('track_count')).all()
+@chinook_bp.route("/top_customers")
+def top_customers():
+    spent = func.sum(Invoice.Total).label("spent")
 
-    genres = [d[0] for d in data]
-    counts = [d[1] for d in data]
+    data = (
+        db.session.query(
+            Customer.FirstName,
+            Customer.LastName,
+            spent,
+        )
+        .join(Invoice, Invoice.CustomerId == Customer.CustomerId)
+        .group_by(
+            Customer.CustomerId,
+            Customer.FirstName,
+            Customer.LastName,
+        )
+        .order_by(spent.desc())
+        .limit(10)
+        .all()
+    )
+
+    items = [
+        {
+            "name": f"{first_name or ''} {last_name or ''}".strip(),
+            "value": f"${float(total or 0):.2f}",
+        }
+        for first_name, last_name, total in data
+    ]
+
+    return render_template(
+        "data_list.html",
+        title="Top 10 Spenders",
+        items=items,
+        total_count=len(items),
+    )
+
+
+@chinook_bp.route("/genres_stats")
+def genres_stats():
+    data = (
+        db.session.query(
+            Genre.Name,
+            func.count(Track.TrackId).label("track_count"),
+        )
+        .outerjoin(Track, Track.GenreId == Genre.GenreId)
+        .group_by(Genre.GenreId, Genre.Name)
+        .order_by(func.count(Track.TrackId).desc())
+        .all()
+    )
+
+    genres = [name or "Unknown" for name, count in data]
+    counts = [count for name, count in data]
 
     fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor("#151515")
+    ax.set_facecolor("#151515")
 
-    fig.patch.set_facecolor('#242424')
-    ax.set_facecolor('#242424')
-
-    bars = ax.bar(genres, counts, color='#dc3545')
-
-    ax.tick_params(colors='white')
-    ax.xaxis.label.set_color('white')
-    ax.yaxis.label.set_color('white')
-    ax.title.set_color('white')
-
-    plt.xticks(rotation=90, fontsize=10)
-    plt.yticks(fontsize=10)
-    plt.ylabel('Number of Tracks')
-    plt.title('Tracks per Genre')
+    ax.bar(genres, counts, color="#ff304f")
+    ax.tick_params(axis="x", colors="white", labelsize=9)
+    ax.tick_params(axis="y", colors="white")
+    ax.set_ylabel("Number of Tracks", color="white")
+    ax.set_title("Tracks per Genre", color="white")
 
     for spine in ax.spines.values():
-        spine.set_edgecolor('#555555')
+        spine.set_color("#555555")
 
-    plt.tight_layout()
+    plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
+    fig.tight_layout()
 
     img = io.BytesIO()
     fig.savefig(
         img,
-        format='png',
+        format="png",
         facecolor=fig.get_facecolor(),
-        edgecolor='none'
+        bbox_inches="tight",
     )
-
     img.seek(0)
 
-    plot_url = base64.b64encode(
-        img.getvalue()
-    ).decode('utf8')
-
+    plot_url = base64.b64encode(img.getvalue()).decode("utf-8")
     plt.close(fig)
 
     items = [
-        {"name": g, "value": f"{c} Tracks"}
-        for g, c in data
+        {
+            "name": name or "Unknown",
+            "value": f"{count} Tracks",
+        }
+        for name, count in data
     ]
 
     return render_template(
-        'data_list.html',
+        "data_list.html",
         title="Genre Statistics",
         items=items,
-        plot_url=plot_url
+        total_count=len(items),
+        plot_url=plot_url,
     )
+
+
+@chinook_bp.route("/metadata")
+def metadata():
+    inspector = inspect(db.engine)
+    tables = {}
+
+    for table_name in inspector.get_table_names():
+        tables[table_name] = [
+            {
+                "name": column["name"],
+                "type": str(column["type"]),
+            }
+            for column in inspector.get_columns(table_name)
+        ]
+
+    return render_template(
+        "metadata.html",
+        tables=tables,
+    )
+
+
+@chinook_bp.route("/api/metadata")
+def json_metadata():
+    inspector = inspect(db.engine)
+    tables = {}
+
+    for table_name in inspector.get_table_names():
+        tables[table_name] = [
+            {
+                "name": column["name"],
+                "type": str(column["type"]),
+            }
+            for column in inspector.get_columns(table_name)
+        ]
+
+    return jsonify(tables)

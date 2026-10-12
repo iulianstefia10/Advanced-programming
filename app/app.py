@@ -1,4 +1,5 @@
 from flask import Flask, render_template
+from models.chinook import Artist, Album, Genre, Track, Customer, Invoice, InvoiceLine
 from influxdb_flask import InfluxDB
 import os
 
@@ -33,6 +34,16 @@ def create_app():
     # -------------------------
     # InfluxDB
     # -------------------------
+
+
+    with app.app_context():
+        db.reflect()
+
+        for table_name, table in db.metadata.tables.items():
+            print(f"\nTable: {table_name}")
+
+            for column in table.columns:
+                print(f"  Column: {column.name}, Type: {column.type}")
 
     app.config["INFLUXDB_V2_URL"] = (
         "http://192.168.168.88:8086"
@@ -75,6 +86,6 @@ app = create_app()
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
-        port=5047,
+        port=5004,
         debug=True
     )
