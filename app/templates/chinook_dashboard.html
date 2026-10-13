@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}
+Chinook · Analytics
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-music-note-beamed"></i>
+        CHINOOK DATABASE
+    </div>
+
+    <h1>
+        Music <span>Analytics.</span>
+    </h1>
+
+    <p>
+        Explore artists, albums, customers, sales
+        and genre statistics from the Chinook database.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    <div class="row g-4">
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+
+                <h3>Artists</h3>
+
+                <p>
+                    Browse all artists stored in the database.
+                </p>
+
+                <a href="/chinook/artists" class="btn-modern">
+                    View Artists
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-disc"></i>
+                </div>
+
+                <h3>Albums</h3>
+
+                <p>
+                    Explore albums and their artists.
+                </p>
+
+                <a href="/chinook/albums" class="btn-modern">
+                    View Albums
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-bar-chart"></i>
+                </div>
+
+                <h3>Artist Sales</h3>
+
+                <p>
+                    See the top artists ranked by sales.
+                </p>
+
+                <a href="/chinook/popular_artists" class="btn-modern">
+                    View Analytics
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-person-check"></i>
+                </div>
+
+                <h3>Top Customers</h3>
+
+                <p>
+                    Find the customers with the highest spending.
+                </p>
+
+                <a href="/chinook/top_customers" class="btn-modern">
+                    View Customers
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-pie-chart"></i>
+                </div>
+
+                <h3>Genres</h3>
+
+                <p>
+                    Analyse the number of tracks per genre.
+                </p>
+
+                <a href="/chinook/genres_stats" class="btn-modern">
+                    View Genres
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-collection"></i>
+                </div>
+
+                <h3>Albums per Artist</h3>
+
+                <p>
+                    Compare the number of albums created
+                    by each artist.
+                </p>
+
+                <a href="/chinook/albums_per_artist" class="btn-modern">
+                    View Report
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-diagram-3"></i>
+                </div>
+
+                <h3>Database Structure</h3>
+
+                <p>
+                    Explore database tables, columns and data types
+                    in the Chinook database.
+                </p>
+
+                <a href="/chinook/metadata" class="btn-modern">
+                    View Structure
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-music-note-list"></i>
+                </div>
+
+                <h3>Artists with Albums</h3>
+
+                <p>
+                    Browse artists together with their associated albums.
+                </p>
+
+                <a href="/chinook/artists_with_albums" class="btn-modern">
+                    View Artists and Albums
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}

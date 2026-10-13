@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}
+DataHub · Home
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-database"></i>
+        DATA PLATFORM
+    </div>
+
+    <h1>
+        Explore your
+        <span>data.</span>
+    </h1>
+
+    <p>
+        A unified interface for exploring relational databases,
+        time-series data and analytical insights from multiple
+        data sources.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    <div class="text-center mb-5">
+
+        <h2 class="section-title">
+            Choose a data source
+        </h2>
+
+        <p class="section-subtitle">
+            Select a database or service to start exploring.
+        </p>
+
+    </div>
+
+
+    <div class="row g-4">
+
+
+        <!-- CHINOOK -->
+
+        <div class="col-lg-6">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-music-note-beamed"></i>
+                </div>
+
+                <h3>Chinook Database</h3>
+
+                <p>
+                    Explore a relational music store database
+                    containing artists, albums, tracks,
+                    customers and sales information.
+                </p>
+
+                <ul class="feature-list">
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Artists & albums
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Customer analytics
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Sales statistics
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Genre analysis
+                    </li>
+
+                </ul>
+
+                <a href="/chinook/" class="btn-modern">
+                    Explore Chinook
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <!-- INFLUXDB -->
+
+        <div class="col-lg-6">
+
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-activity"></i>
+                </div>
+
+                <h3>InfluxDB</h3>
+
+                <p>
+                    Explore time-series weather data,
+                    measurements, fields and database
+                    buckets.
+                </p>
+
+                <ul class="feature-list">
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Weather data
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Measurements
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Fields & schemas
+                    </li>
+
+                    <li>
+                        <i class="bi bi-check-circle-fill"></i>
+                        Database buckets
+                    </li>
+
+                </ul>
+
+                <a href="/influxdb/" class="btn-modern">
+                    Explore InfluxDB
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5 pt-5">
+
+        <h2 class="section-title">
+            Quick access
+        </h2>
+
+        <p class="section-subtitle">
+            Jump directly to a service.
+        </p>
+
+        <div class="d-flex flex-wrap justify-content-center gap-3">
+
+            <a href="/chinook/artists" class="btn-outline-modern">
+                <i class="bi bi-person"></i>
+                Artists
+            </a>
+
+            <a href="/chinook/albums" class="btn-outline-modern">
+                <i class="bi bi-disc"></i>
+                Albums
+            </a>
+
+            <a href="/chinook/popular_artists" class="btn-outline-modern">
+                <i class="bi bi-bar-chart"></i>
+                Sales
+            </a>
+
+            <a href="/chinook/genres_stats" class="btn-outline-modern">
+                <i class="bi bi-pie-chart"></i>
+                Genres
+            </a>
+
+            <a href="/influxdb/buckets" class="btn-outline-modern">
+                <i class="bi bi-database"></i>
+                Buckets
+            </a>
+
+            <a href="/influxdb/measurements" class="btn-outline-modern">
+                <i class="bi bi-graph-up"></i>
+                Measurements
+            </a>
+
+        </div>
+
+    </div>
+
+</section>
+
+{% endblock %}
