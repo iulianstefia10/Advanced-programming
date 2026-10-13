@@ -1,26 +1,208 @@
 {% extends "base.html" %}
-{% block content %}
-<div class="card mx-auto mb-5" style="max-width: 800px;">
-    <div class="card-header text-center">
-        {{ title }}
-    </div>
-    
-    {% if plot_url %}
-    <div class="card-body text-center p-0">
-        <img src="data:image/png;base64,{{ plot_url }}" class="img-fluid rounded-bottom" alt="Chart">
-    </div>
-    {% endif %}
 
-    <ul class="list-group list-group-flush">
-        {% for item in items %}
-        <li class="list-group-item d-flex justify-content-between align-items-center px-4 py-3">
-            <span class="fw-bold">{{ item.name }}</span>
-            <span class="badge badge-accent rounded-pill px-3 py-2 fs-6">{{ item.value }}</span>
-        </li>
-        {% endfor %}
-    </ul>
-</div>
-<div class="text-center mb-5">
-    <a href="/dashboard" class="btn btn-outline-light px-4">&larr; Back to Dashboard</a>
-</div>
+{% block title %}
+{{ title }} ·
+{% if request.endpoint and request.endpoint.startswith('chinook.') %}
+Chinook
+{% elif request.endpoint and request.endpoint.startswith('influxdb.') %}
+InfluxDB
+{% else %}
+Data Explorer
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+    <div class="hero-badge">
+        <i class="bi bi-database"></i>
+        DATA EXPLORER
+    </div>
+
+    <h1>{{ title }} <span>Overview.</span></h1>
+
+    <p>
+        Explore and analyse records retrieved from your database.
+    </p>
+</section>
+
+<section class="container pb-5">
+    <div class="weather-page">
+
+        <div class="weather-header">
+            <div>
+                <div class="weather-location">
+                    <i class="bi bi-hdd-stack"></i>
+                    DATABASE EXPLORER
+                </div>
+
+                <h2>{{ title }}</h2>
+                <p>Browse the available records and query results.</p>
+            </div>
+
+            {% if request.endpoint and request.endpoint.startswith('chinook.') %}
+            <a href="{{ url_for('chinook.dashboard') }}"
+               class="btn-outline-modern">
+                <i class="bi bi-arrow-left"></i>
+                Back to Chinook
+            </a>
+            {% elif request.endpoint and request.endpoint.startswith('influxdb.') %}
+            <a href="{{ url_for('influxdb.dashboard') }}"
+               class="btn-outline-modern">
+                <i class="bi bi-arrow-left"></i>
+                Back to InfluxDB
+            </a>
+            {% else %}
+            <a href="/" class="btn-outline-modern">
+                <i class="bi bi-arrow-left"></i>
+                Back to DataHub
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="weather-cards">
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-list-ul"></i>
+                    TOTAL RECORDS
+                </div>
+
+                <div class="card-value">
+                    {% if total_count is defined %}
+                        {{ total_count }}
+                    {% else %}
+                        {{ items|length }}
+                    {% endif %}
+                </div>
+
+                <div class="card-info">
+                    Number of records returned or displayed
+                </div>
+            </div>
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-check-circle"></i>
+                    QUERY STATUS
+                </div>
+
+                <div class="card-value">
+                    {% if items %}Success{% else %}Empty{% endif %}
+                </div>
+
+                <div class="card-info">
+                    {% if items %}
+                        Data returned successfully
+                    {% else %}
+                        No records returned by the query
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+
+        {% if plot_url is defined and plot_url %}
+        <div class="weather-table-card mb-4">
+            <div class="section-title">
+                <div>
+                    <h2>
+                        <i class="bi bi-bar-chart"></i>
+                        Data Visualisation
+                    </h2>
+                    <p>Graphical representation of the query results.</p>
+                </div>
+            </div>
+
+            <div class="text-center p-3">
+                <img
+                    src="data:image/png;base64,{{ plot_url }}"
+                    alt="{{ title }} chart"
+                    style="max-width: 100%; height: auto;"
+                >
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="weather-table-card">
+            <div class="section-title">
+                <div>
+                    <h2>
+                        <i class="bi bi-table"></i>
+                        Results
+                    </h2>
+                    <p>Records retrieved by your database query.</p>
+                </div>
+
+                <span class="measurement-count">
+                    {{ items|length }} displayed
+                </span>
+            </div>
+
+            {% if items %}
+            <div class="table-wrapper">
+                <table class="weather-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+
+                            <td>
+                                <span class="measurement-time">
+                                    {{ item.name }}
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="temperature">
+                                    {{ item.value if item.value else '—' }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% else %}
+            <div class="weather-empty-state">
+                <div class="empty-state-icon">
+                    <i class="bi bi-database-exclamation"></i>
+                </div>
+
+                <h2>No Records Found</h2>
+
+                <p>
+                    No records were returned by this query.
+                    Check your database connection and query.
+                </p>
+
+                {% if request.endpoint and request.endpoint.startswith('chinook.') %}
+                <a href="{{ url_for('chinook.dashboard') }}"
+                   class="btn-outline-modern">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Chinook
+                </a>
+                {% elif request.endpoint and request.endpoint.startswith('influxdb.') %}
+                <a href="{{ url_for('influxdb.dashboard') }}"
+                   class="btn-outline-modern">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to InfluxDB
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</section>
+
 {% endblock %}
