@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}
+Weather Analytics · InfluxDB
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+    <div class="hero-badge">
+        <i class="bi bi-cloud-sun"></i>
+        INFLUXDB · WEATHER
+    </div>
+
+    <h1>Weather <span>Analytics.</span></h1>
+
+    <p>
+        Explore temperature measurements collected in Annecy
+        over the last seven days.
+    </p>
+</section>
+
+<section class="container pb-5">
+    <div class="weather-page">
+
+        <div class="weather-header">
+            <div>
+                <div class="weather-location">
+                    <i class="bi bi-geo-alt-fill"></i>
+                    ANNECY, FRANCE
+                </div>
+
+                <h2>Temperature Overview</h2>
+                <p>Historical temperature data from InfluxDB.</p>
+            </div>
+
+            <a href="{{ url_for('influxdb.dashboard') }}"
+               class="btn-outline-modern">
+                <i class="bi bi-arrow-left"></i>
+                Back to Dashboard
+            </a>
+        </div>
+
+        {% if data %}
+
+        <div class="weather-cards">
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-thermometer-half"></i>
+                    LATEST
+                </div>
+                <div class="card-value">
+                    {{ "%.1f"|format(data[-1]) }}°C
+                </div>
+                <div class="card-info">
+                    Latest recorded measurement
+                </div>
+            </div>
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-thermometer-high"></i>
+                    MAXIMUM
+                </div>
+                <div class="card-value">
+                    {{ "%.1f"|format(data|max) }}°C
+                </div>
+                <div class="card-info">
+                    Highest recorded temperature
+                </div>
+            </div>
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-thermometer-low"></i>
+                    MINIMUM
+                </div>
+                <div class="card-value">
+                    {{ "%.1f"|format(data|min) }}°C
+                </div>
+                <div class="card-info">
+                    Lowest recorded temperature
+                </div>
+            </div>
+
+            <div class="weather-card">
+                <div class="card-label">
+                    <i class="bi bi-database"></i>
+                    OBSERVATIONS
+                </div>
+                <div class="card-value">{{ data|length }}</div>
+                <div class="card-info">
+                    Measurements retrieved
+                </div>
+            </div>
+
+        </div>
+
+        <div class="weather-chart-card">
+            <div class="section-title">
+                <div>
+                    <h2>
+                        <i class="bi bi-graph-up"></i>
+                        Temperature History
+                    </h2>
+                    <p>
+                        Temperature changes over the selected period.
+                    </p>
+                </div>
+
+                <span class="weather-chart-unit">°C</span>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </div>
+
+        <div class="weather-table-card">
+            <div class="section-title">
+                <div>
+                    <h2>
+                        <i class="bi bi-table"></i>
+                        Temperature Measurements
+                    </h2>
+                    <p>
+                        Individual observations returned by InfluxDB.
+                    </p>
+                </div>
+
+                <span class="measurement-count">
+                    {{ data|length }} records
+                </span>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="weather-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date &amp; Time</th>
+                            <th>Temperature</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {% for i in range(data|length) %}
+                        <tr>
+                            <td>{{ i + 1 }}</td>
+                            <td>
+                                <span class="measurement-time">
+                                    {{ time[i] }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="temperature">
+                                    {{ "%.1f"|format(data[i]) }} °C
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {% else %}
+
+        <div class="weather-empty-state">
+            <div class="empty-state-icon">
+                <i class="bi bi-cloud-slash"></i>
+            </div>
+
+            <h2>No Weather Data Available</h2>
+
+            <p>
+                No temperature measurements were found for Annecy
+                during the selected seven-day period.
+            </p>
+
+            <a href="{{ url_for('influxdb.dashboard') }}"
+               class="btn-outline-modern">
+                <i class="bi bi-arrow-left"></i>
+                Back to InfluxDB
+            </a>
+        </div>
+
+        {% endif %}
+
+    </div>
+</section>
+
+{% if data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script id="weather-data" type="application/json">
+{{ {"times": time, "temperatures": data} | tojson }}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const dataElement = document.getElementById("weather-data");
+    const canvas = document.getElementById("temperatureChart");
+
+    if (!dataElement || !canvas || typeof Chart === "undefined") {
+        console.error("Unable to initialise the weather chart.");
+        return;
+    }
+
+    const chartData = JSON.parse(dataElement.textContent);
+    const times = chartData.times;
+    const temperatures = chartData.temperatures;
+
+    if (!temperatures.length) {
+        return;
+    }
+
+    const context = canvas.getContext("2d");
+
+    const gradient = context.createLinearGradient(0, 0, 0, 350);
+    gradient.addColorStop(0, "rgba(255, 48, 79, 0.28)");
+    gradient.addColorStop(1, "rgba(255, 48, 79, 0.00)");
+
+    new Chart(context, {
+        type: "line",
+
+        data: {
+            labels: times,
+
+            datasets: [{
+                label: "Temperature (°C)",
+                data: temperatures,
+                borderColor: "#ff304f",
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: "#ff304f",
+                pointHoverBorderColor: "#ffffff"
+            }]
+        },
+
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+
+            interaction: {
+                intersect: false,
+                mode: "index"
+            },
+
+            plugins: {
+                legend: {
+                    display: false
+                },
+
+                tooltip: {
+                    backgroundColor: "#211b20",
+                    titleColor: "#ffffff",
+                    bodyColor: "#ffffff",
+                    borderColor: "rgba(255, 48, 79, 0.4)",
+                    borderWidth: 1,
+                    padding: 12,
+
+                    callbacks: {
+                        label: function (context) {
+                            return "Temperature: "
+                                + Number(context.parsed.y).toFixed(1)
+                                + " °C";
+                        }
+                    }
+                }
+            },
+
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+
+                    ticks: {
+                        color: "#969696",
+                        maxTicksLimit: 8,
+                        maxRotation: 0
+                    },
+
+                    border: {
+                        color: "#353035"
+                    }
+                },
+
+                y: {
+                    title: {
+                        display: true,
+                        text: "Temperature (°C)",
+                        color: "#b0a8b0"
+                    },
+
+                    ticks: {
+                        color: "#969696"
+                    },
+
+                    grid: {
+                        color: "rgba(255, 255, 255, 0.07)"
+                    },
+
+                    border: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,63 @@
+
+{% extends "base.html" %}
+
+{% block title %}Dataset Formatting{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+
+    <h2>Dataset Formatting</h2>
+    <p>Split a dataset into input sequences (X) and target sequences (Y).</p>
+
+    <a href="{{ url_for('influxdb.dashboard') }}"
+       class="btn btn-outline-secondary mb-3">
+        Back to InfluxDB
+    </a>
+
+    <div class="card p-3 mb-4">
+        <form method="GET" action="{{ url_for('influxdb.format_test') }}">
+            <label for="sequence_length" class="form-label">
+                Sequence length (x)
+            </label>
+
+            <input
+                type="number"
+                class="form-control mb-3"
+                id="sequence_length"
+                name="x"
+                value="{{ sequence_length }}"
+                min="1"
+                required
+            >
+
+            <button type="submit" class="btn btn-primary">
+                Format dataset
+            </button>
+        </form>
+    </div>
+
+    <div class="card p-3 mb-4">
+        <h5>Original dataset</h5>
+        <p>{{ data }}</p>
+    </div>
+
+    <div class="card p-3 mb-4">
+        <h5>Input sequences (X)</h5>
+        {% for sequence in X %}
+            <p>{{ sequence }}</p>
+        {% else %}
+            <p>No input sequences available.</p>
+        {% endfor %}
+    </div>
+
+    <div class="card p-3">
+        <h5>Target sequences (Y)</h5>
+        {% for sequence in y %}
+            <p>{{ sequence }}</p>
+        {% else %}
+            <p>No target sequences available.</p>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

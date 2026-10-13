@@ -1,0 +1,322 @@
+/* =========================================
+   INFLUXDB STATUS PAGE
+========================================= */
+
+.influx-status-card {
+    max-width: 850px;
+    margin: 0 auto;
+    padding: 65px 40px;
+    text-align: center;
+    background:
+        radial-gradient(
+            circle at center,
+            rgba(220, 53, 69, 0.08),
+            transparent 60%
+        ),
+        #111;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 28px;
+    box-shadow: 0 25px 70px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.influx-status-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(220, 53, 69, 0.4);
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.6),
+        0 0 40px rgba(220, 53, 69, 0.1);
+}
+
+.status-circle {
+    width: 105px;
+    height: 105px;
+    margin: 0 auto 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 2.7rem;
+}
+
+.status-circle.connected {
+    color: #dc3545;
+    border: 2px solid rgba(220, 53, 69, 0.6);
+    background: rgba(220, 53, 69, 0.08);
+    box-shadow: 0 0 35px rgba(220, 53, 69, 0.2);
+}
+
+.status-circle.disconnected {
+    color: #777;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.status-badge {
+    display: inline-block;
+    margin-bottom: 15px;
+    padding: 7px 18px;
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    background: rgba(220, 53, 69, 0.08);
+    border-radius: 30px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+}
+
+.status-badge.disconnected {
+    color: #777;
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.influx-status-card h2 {
+    margin-bottom: 12px;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.influx-status-card p {
+    margin: 0;
+    color: #888;
+    line-height: 1.7;
+}
+
+/* Status information */
+
+.influx-info-grid {
+    max-width: 850px;
+    margin: 20px auto 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.influx-info-card {
+    padding: 22px;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    transition: all 0.25s ease;
+}
+
+.influx-info-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(220, 53, 69, 0.35);
+    box-shadow: 0 0 25px rgba(220, 53, 69, 0.08);
+}
+
+.influx-info-card i {
+    display: block;
+    margin-bottom: 12px;
+    color: #dc3545;
+    font-size: 1.4rem;
+}
+
+.influx-info-card span {
+    display: block;
+    margin-bottom: 7px;
+    color: #777;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+.influx-info-card strong {
+    color: #ddd;
+    font-size: 0.9rem;
+}
+
+/* =========================================
+   INFLUXDB FORMAT PAGE
+========================================= */
+
+.format-summary {
+    max-width: 1100px;
+    margin: 0 auto 25px;
+    padding: 25px 30px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+}
+
+.format-summary-icon {
+    width: 55px;
+    height: 55px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+    border: 1px solid rgba(220, 53, 69, 0.25);
+    font-size: 1.4rem;
+}
+
+.format-summary-label {
+    margin-bottom: 3px;
+    color: #dc3545;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+.format-summary h2 {
+    margin: 0 0 5px;
+    font-size: 1.25rem;
+}
+
+.format-summary p {
+    margin: 0;
+    color: #888;
+    line-height: 1.6;
+}
+
+.format-summary strong {
+    color: #dc3545;
+}
+
+/* X / Y cards */
+
+.format-result-card {
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 20px;
+    transition: all 0.3s ease;
+}
+
+.format-result-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(220, 53, 69, 0.4);
+    box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(220, 53, 69, 0.08);
+}
+
+.format-card-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.format-card-icon {
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+    font-size: 1.1rem;
+}
+
+.format-card-header span {
+    display: block;
+    color: #dc3545;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+.format-card-header h2 {
+    margin: 2px 0 0;
+    font-size: 1.3rem;
+}
+
+.format-code {
+    min-height: 230px;
+    padding: 20px;
+    background: #0b0b0b;
+}
+
+.format-code pre {
+    margin: 0;
+    color: #ddd;
+    font-family: "Courier New", monospace;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+/* Parameters */
+
+.format-details {
+    max-width: 1100px;
+    margin: 25px auto 0;
+    padding: 25px 30px;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 18px;
+}
+
+.format-details-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 22px;
+}
+
+.format-details-header > i {
+    color: #dc3545;
+    font-size: 1.4rem;
+}
+
+.format-details-header h3 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+}
+
+.format-details-header p {
+    margin: 0;
+    color: #777;
+    font-size: 0.85rem;
+}
+
+.format-parameter {
+    padding: 18px;
+    background: #0b0b0b;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+}
+
+.format-parameter span {
+    display: block;
+    margin-bottom: 8px;
+    color: #777;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.format-parameter strong {
+    color: #ddd;
+    font-size: 0.9rem;
+    word-break: break-word;
+}
+
+/* Responsive */
+
+@media (max-width: 768px) {
+    .influx-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .influx-status-card {
+        padding: 45px 25px;
+    }
+
+    .format-summary {
+        align-items: flex-start;
+    }
+}
