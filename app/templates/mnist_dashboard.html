@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}
+MNIST · Image Upload & Inference
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-cpu"></i>
+        DEEP LEARNING &middot; TENSORFLOW
+    </div>
+
+    <h1>
+        Image <span>Inference.</span>
+    </h1>
+
+    <p>
+        Upload images to the server and run handwritten digit classification
+        using the pre-trained Convolutional Neural Network model.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    {% if error %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="database-card" style="border-color: #ff304f;">
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Upload Error</h3>
+                <p class="mb-0">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Card 1: Upload Form -->
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                </div>
+
+                <h3>Upload Image</h3>
+
+                <p>
+                    Select an image file (PNG, JPG) from your device to upload and analyze.
+                </p>
+
+                <form action="{{ url_for('mnist.dashboard') }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input
+                            type="file"
+                            name="file"
+                            id="fileInput"
+                            accept="image/*"
+                            class="form-control bg-dark text-white border-secondary"
+                            required
+                        >
+                    </div>
+
+                    <button type="submit" class="btn-modern w-100 border-0" style="cursor: pointer;">
+                        Upload &amp; Predict
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </form>
+
+            </div>
+        </div>
+
+
+        <!-- Card 2: Image Preview -->
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-image"></i>
+                </div>
+
+                <h3>Image Preview</h3>
+
+                {% if image_data %}
+                <p>
+                    Uploaded file: <strong>{{ filename }}</strong>
+                </p>
+                <div class="text-center my-3">
+                    <img
+                        src="data:image/png;base64,{{ image_data }}"
+                        alt="Uploaded Image"
+                        class="img-fluid rounded"
+                        style="max-height: 140px; border: 1px solid #333;"
+                    >
+                </div>
+                {% else %}
+                <p>
+                    No image uploaded in this session yet. Choose a file on the left to preview it here.
+                </p>
+                {% endif %}
+
+            </div>
+        </div>
+
+
+        <!-- Card 3: AI Prediction Result -->
+        <div class="col-md-6 col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-magic"></i>
+                </div>
+
+                <h3>Model Prediction</h3>
+
+                {% if prediction is not none %}
+                <p>
+                    Predicted digit from <strong>MNIST_keras_CNN.h5</strong>:
+                </p>
+                <div class="my-3">
+                    <span style="font-size: 3rem; font-weight: 800; color: #ff304f; line-height: 1;">
+                        {{ prediction }}
+                    </span>
+                    <p class="mt-2 mb-0">
+                        Confidence: <strong>{{ confidence }}%</strong>
+                    </p>
+                </div>
+                {% else %}
+                <p>
+                    Submit an image of a digit (0–9) to view the neural network classification result.
+                </p>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- Gallery of Uploaded Images -->
+    {% if uploaded_files %}
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="database-card">
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="database-icon mb-0">
+                            <i class="bi bi-images"></i>
+                        </div>
+                        <div>
+                            <h3 class="mb-1">Uploaded Images Gallery ({{ uploaded_files|length }})</h3>
+                            <p class="mb-0">
+                                All images currently stored in <code>/static/uploads</code>:
+                            </p>
+                        </div>
+                    </div>
+
+                    <form action="{{ url_for('mnist.clear_images') }}" method="POST" class="mt-2 mt-sm-0">
+                        <button type="submit" class="btn-outline-modern border-0" style="cursor: pointer; background: rgba(255, 48, 79, 0.15); color: #ff304f;">
+                            <i class="bi bi-trash"></i>
+                            Delete All
+                        </button>
+                    </form>
+                </div>
+
+                <div class="row g-3 mt-2">
+                    {% for img_name in uploaded_files %}
+                    <div class="col-6 col-sm-4 col-md-3 col-lg-2 text-center">
+                        <div class="p-2 rounded d-flex flex-column justify-content-between h-100" style="background: rgba(255,255,255,0.03); border: 1px solid #2a2a2a;">
+                            <div>
+                                <img
+                                    src="{{ url_for('static', filename='uploads/' ~ img_name) }}"
+                                    alt="{{ img_name }}"
+                                    class="img-fluid rounded mb-2"
+                                    style="height: 80px; object-fit: contain;"
+                                >
+                                <div class="small text-truncate text-secondary mb-2" title="{{ img_name }}">
+                                    {{ img_name }}
+                                </div>
+                            </div>
+
+                            <form action="{{ url_for('mnist.delete_image', filename=img_name) }}" method="POST">
+                                <button type="submit" class="btn btn-sm w-100" style="background-color: #ff304f; color: white; border: none; font-size: 0.75rem;">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}
