@@ -35,7 +35,6 @@ def create_app():
     # InfluxDB
     # -------------------------
 
-
     with app.app_context():
         db.reflect()
 
@@ -67,16 +66,16 @@ def create_app():
     def home():
         return render_template("home.html")
 
-    # -------------------------
-    # Blueprints
-    # -------------------------
+   
 
     from routes.chinook import chinook_bp
     from routes.influxdb import influx_bp
+    from routes.mnist import mnist_bp
     from routes.random_forest import rf_bp
 
     app.register_blueprint(chinook_bp)
     app.register_blueprint(influx_bp)
+    app.register_blueprint(mnist_bp)
     app.register_blueprint(rf_bp)
 
     return app
