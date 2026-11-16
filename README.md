@@ -103,6 +103,48 @@ Some parts of the code given in the subject do not work as written, or give misl
 | 5 | `print(digits.keys())` | A `print` in a web route only writes to the server console, the user does not see it. | The page shows the information about the dataset instead: number of samples, features, train and test sizes. |
 | 6 | `test_size = 0.1` on iris | Not a bug, but iris has only 150 samples, so the test set has only 15 flowers: one error changes the accuracy by 6.7 %. | Kept, and explained in the analysis of the results below. |
 
+### Sensitivity study
+
+Score on the test set for every combination of `test_size` and `n_estimators` (`random_state = 42`, no `max_depth` limit). The same tables can be obtained with the **Sensitivity study** button.
+
+**digits** (1,797 images 8×8, 10 classes) – accuracy
+
+| test_size \ n_estimators | 1 | 10 | 50 | 100 |
+|---|---|---|---|---|
+| 0.1 | 0.7611 | 0.9722 | 0.9722 | 0.9722 |
+| 0.2 | 0.7917 | 0.9361 | 0.9583 | 0.9611 |
+| 0.3 | 0.7704 | 0.9426 | 0.9593 | 0.9667 |
+| 0.4 | 0.7497 | 0.9332 | 0.9611 | 0.9666 |
+| 0.5 | 0.7620 | 0.9288 | 0.9511 | 0.9577 |
+
+**iris** (150 flowers, 4 features, 3 classes) – accuracy
+
+| test_size \ n_estimators | 1 | 10 | 50 | 100 |
+|---|---|---|---|---|
+| 0.1 | 0.9333 | 0.9333 | 0.9333 | 0.9333 |
+| 0.2 | 0.9667 | 0.9667 | 0.9000 | 0.9000 |
+| 0.3 | 0.8667 | 0.9111 | 0.8889 | 0.8889 |
+| 0.4 | 0.9333 | 0.9500 | 0.9333 | 0.9167 |
+| 0.5 | 0.8800 | 0.8800 | 0.8933 | 0.8933 |
+
+**diabetes** (442 patients, 10 features, regression) – R²
+
+| test_size \ n_estimators | 1 | 10 | 50 | 100 |
+|---|---|---|---|---|
+| 0.1 | 0.1724 | 0.4529 | 0.5122 | 0.5252 |
+| 0.2 | 0.1431 | 0.4082 | 0.4254 | 0.4428 |
+| 0.3 | -0.0548 | 0.4016 | 0.4569 | 0.4703 |
+| 0.4 | -0.1665 | 0.3935 | 0.4593 | 0.4888 |
+| 0.5 | -0.1329 | 0.3716 | 0.3932 | 0.4074 |
+
+### Analysis
+
+- **Number of trees (`n_estimators`).** This is the most important hyperparameter. A single tree is much weaker than a forest: on digits the accuracy goes from about 0.76 with 1 tree to 0.93–0.97 with 10 trees, and on diabetes the R² goes from 0.17 (or even negative) to about 0.45. Averaging many trees reduces the overfitting of each individual tree. After 50 trees the gain becomes small (plateau), while the training time keeps growing.
+- **Size of the test set (`test_size`).** A bigger test set means less data for training, so the score generally decreases: on diabetes with 100 trees the R² goes from 0.53 (test 10 %) to 0.41 (test 50 %), on digits from 0.97 to 0.96. Digits is less affected because it has more samples.
+- **iris.** The problem is easy (the classes are almost separable), so even one tree reaches about 0.93. The differences in the table are mostly noise: with 15 to 75 test flowers, one or two errors change the accuracy by several percent, which is why more trees do not always give a better score here.
+- **diabetes.** The R² stays around 0.4–0.5: the 10 features explain only about half of the variance of the disease progression, it is a harder problem. A negative R² with a single tree means that this tree predicts worse than simply giving the mean value: it overfits the training data.
+- **Conclusion.** For these datasets, 50 to 100 trees and a test set of 20–30 % are a good compromise. The results only make sense with a fixed `random_state`, and with the right type of model (regression for diabetes).
+
 ## Security
 - Do not commit `.env` files or API tokens.
 - Keep credentials out of source code.
