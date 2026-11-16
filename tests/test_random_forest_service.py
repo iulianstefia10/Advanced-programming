@@ -1,9 +1,5 @@
-"""
-Tests of the PW1 service (app/services/random_forest.py).
-
-Run from the project root:
-    python -m unittest discover -s tests -v
-"""
+# Tests for app/services/random_forest.py
+# Run: python -m unittest discover -s tests -v
 
 import os
 import sys
@@ -33,15 +29,13 @@ class TrainRandomForestTests(unittest.TestCase):
                 self.assertIn("precision", result["report"])
 
     def test_diabetes_is_treated_as_regression(self):
-        # The subject uses a classifier for diabetes, which gives an accuracy of 0:
-        # its target is continuous, so a regressor and the R2 score are used.
         result = train_random_forest("diabetes", test_size=0.2, n_estimators=10)
         self.assertEqual(result["task"], "regression")
         self.assertEqual(result["metric_name"], "R²")
         self.assertIsNone(result["report"])
         self.assertIn("mse", result)
         self.assertGreater(result["mse"], 0)
-        self.assertGreater(result["score"], 0)  # better than predicting the mean
+        self.assertGreater(result["score"], 0)
 
     def test_sizes_of_train_and_test_sets(self):
         result = train_random_forest("iris", test_size=0.1, n_estimators=10)
@@ -56,8 +50,7 @@ class TrainRandomForestTests(unittest.TestCase):
         self.assertEqual(first["score"], second["score"])
 
     def test_split_is_stratified(self):
-        # iris has 50 flowers per class: with test_size=0.2 and a stratified
-        # split, each class must have exactly 10 flowers in the test set.
+        # iris has 50 flowers per class, so 10 of each in the test set
         result = train_random_forest("iris", test_size=0.2, n_estimators=10)
         supports = [
             int(line.split()[-1])
@@ -67,8 +60,6 @@ class TrainRandomForestTests(unittest.TestCase):
         self.assertEqual(supports, [10, 10, 10])
 
     def test_report_matches_accuracy(self):
-        # With the arguments in the (y_true, y_pred) order, the "accuracy"
-        # line of the report is the same value as the score.
         result = train_random_forest("digits", test_size=0.2, n_estimators=10)
         accuracy_line = next(
             line for line in result["report"].splitlines()

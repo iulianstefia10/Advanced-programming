@@ -10,7 +10,7 @@ rf_bp = Blueprint(
 
 
 def _read_params(form):
-    """Read and validate the hyperparameters sent by the form."""
+    # read the form and check the values
     dataset = form.get("dataset", "digits")
     if dataset not in DATASETS:
         raise ValueError("Please choose iris, digits or diabetes.")

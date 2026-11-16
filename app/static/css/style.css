@@ -219,7 +219,7 @@ body {
     transition: 0.25s ease;
 }
 
-/* <button> elements get a light grey background from the browser */
+/* buttons are grey by default */
 button.btn-outline-modern {
     background: transparent;
     font-weight: 600;

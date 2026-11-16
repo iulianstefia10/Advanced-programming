@@ -1,18 +1,4 @@
-"""
-PW1 - Random Forest with scikit-learn.
-
-Trains a random forest on one of the scikit-learn toy datasets
-(iris, digits or diabetes) and returns the evaluation metrics.
-
-Notes on the differences with the code given in the PW subject:
-- diabetes is a REGRESSION dataset (continuous target), so it uses
-  RandomForestRegressor and the R2 score instead of accuracy;
-- classification_report expects (y_true, y_pred), the subject passes
-  them in the reverse order;
-- a fixed random_state is used so that the sensitivity study is
-  reproducible;
-- the split is stratified for classification datasets.
-"""
+# PW1 - Random Forest on iris, digits and diabetes
 
 from sklearn.datasets import load_diabetes, load_digits, load_iris
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -36,7 +22,6 @@ N_ESTIMATORS = [1, 10, 50, 100]
 
 def train_random_forest(dataset, test_size=0.1, n_estimators=10,
                         max_depth=None, random_state=42):
-    """Train and evaluate a random forest. Returns a dict of results."""
     if dataset not in DATASETS:
         raise ValueError(f"Unknown dataset: {dataset}")
 
@@ -44,6 +29,7 @@ def train_random_forest(dataset, test_size=0.1, n_estimators=10,
     data = config["loader"]()
     is_classification = config["task"] == "classification"
 
+    # stratify keeps the same class proportions in train and test
     X_train, X_test, y_train, y_test = train_test_split(
         data.data,
         data.target,
@@ -52,6 +38,7 @@ def train_random_forest(dataset, test_size=0.1, n_estimators=10,
         stratify=data.target if is_classification else None,
     )
 
+    # diabetes is a regression dataset, so we use a regressor for it
     model_class = RandomForestClassifier if is_classification else RandomForestRegressor
     model = model_class(
         n_estimators=n_estimators,
@@ -76,6 +63,7 @@ def train_random_forest(dataset, test_size=0.1, n_estimators=10,
     if is_classification:
         result["metric_name"] = "Accuracy"
         result["score"] = accuracy_score(y_test, y_pred)
+        # y_test first, then y_pred
         result["report"] = classification_report(y_test, y_pred, zero_division=0)
     else:
         result["metric_name"] = "R²"
@@ -88,7 +76,7 @@ def train_random_forest(dataset, test_size=0.1, n_estimators=10,
 
 def sensitivity_study(dataset, test_sizes=TEST_SIZES, n_estimators_list=N_ESTIMATORS,
                       random_state=42):
-    """Score of the model for every (test_size, n_estimators) combination."""
+    # train the model for every test_size and n_estimators
     rows = []
     for test_size in test_sizes:
         for n_estimators in n_estimators_list:
@@ -103,7 +91,7 @@ def sensitivity_study(dataset, test_sizes=TEST_SIZES, n_estimators_list=N_ESTIMA
                 "n_estimators": n_estimators,
                 "score": result["score"],
             })
-    # Same results as a grid: one line per test_size, one column per n_estimators
+    # one line per test_size for the table on the page
     table = [
         {
             "test_size": test_size,
