@@ -109,6 +109,29 @@ python -m unittest discover -s tests -v
 
 The tests check the service (metric, sizes, random_state, stratify) and the `/rf` page (form, training, errors).
 
+## PW4 – PyTorch on CPU, GPU and TPU
+
+Notebook: `notebooks/PW4_pytorch_cpu_gpu_tpu.ipynb` (open it in Google Colab).
+
+A small CNN is trained on CIFAR-10 for 2 epochs, then tested on the 10,000 test images.
+To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), then **Run all**. The last cell prints the times.
+
+### What we fixed in the given notebook
+
+- **Errors 1, 2 and 3 (`Input type`)**: the model was on the GPU but the test images stayed on the CPU. In the first one, the code moved `inputs` (from the training loop) instead of `images`. We send `images` and `labels` to the device in the three test cells.
+- The **inference time** was not measured, we added it.
+- The GPU works asynchronously, so we call `torch.cuda.synchronize()` before reading the time.
+- PyTorch only uses the **TPU** with the `torch_xla` library, otherwise it silently runs on the CPU. The first cell chooses TPU, GPU or CPU automatically.
+
+### Results
+
+| Hardware | Training (2 epochs) | Inference (10,000 images) | Accuracy |
+|---|---|---|---|
+| CPU (our laptop) | 113 s | 9 s | 55 % |
+| Colab CPU | | | |
+| Colab GPU (T4) | | | |
+| Colab TPU | | | |
+
 ## Security
 - Do not commit `.env` files or API tokens.
 - Keep credentials out of source code.
