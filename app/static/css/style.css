@@ -219,6 +219,12 @@ body {
     transition: 0.25s ease;
 }
 
+/* <button> elements get a light grey background from the browser */
+button.btn-outline-modern {
+    background: transparent;
+    font-weight: 600;
+}
+
 .btn-outline-modern:hover {
     color: white;
     border-color: #555;
