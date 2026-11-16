@@ -17,9 +17,15 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Visualise weather measurements.
 - Format time-series data into input windows and prediction targets.
 
+### Random Forest (PW1)
+- Train a random forest on the iris, digits or diabetes dataset.
+- Change the hyperparameters from the web page.
+- Run a sensitivity study of the score as a function of the hyperparameters.
+
 ## Technologies
 - Python
 - Flask
+- scikit-learn
 - Flask-SQLAlchemy
 - SQLite
 - InfluxDB 2.x
@@ -59,6 +65,30 @@ Open the application at:
 ```text
 http://localhost:5004/
 ```
+
+## PW1 – Random Forest with scikit-learn
+
+Page: `http://localhost:5004/rf/`
+
+### Goal
+1. Integrate the Random Forest classifier from the subject into a Flask route, with the choice of the dataset (iris, diabetes or digits) and of the hyperparameters.
+2. For each dataset, study the score as a function of the hyperparameters and comment on the results.
+
+### How to use
+1. Choose a dataset and the hyperparameters:
+   - `test_size`: part of the data kept for the test (0.05–0.9);
+   - `n_estimators`: number of trees in the forest (1–500);
+   - `max_depth`: maximum depth of each tree (empty = no limit);
+   - `random_state`: seed, so that the same parameters always give the same result.
+2. **Train model** shows the score on the test set and, for classification, the classification report.
+3. **Sensitivity study** trains the model for every combination of `test_size` (0.1–0.5) and `n_estimators` (1, 10, 50, 100) and shows the scores in a table.
+
+### Files
+| File | Role |
+|---|---|
+| `app/services/random_forest.py` | Loading the datasets, training, evaluation and sensitivity study |
+| `app/routes/random_forest.py` | `/rf` route: reads and validates the form, calls the service |
+| `app/templates/rf_dashboard.html` | Form, result and sensitivity table |
 
 ## Security
 - Do not commit `.env` files or API tokens.
