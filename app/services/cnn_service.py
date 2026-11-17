@@ -3,6 +3,9 @@
 Training runs in a background thread so the Flask request returns immediately.
 The state of the current job lives in memory (module level), so run the app
 with a single process (Flask dev server, or one gunicorn worker).
+
+The user can stop a running training: request_stop() sets a flag, a Keras
+callback notices it after the current batch and stops fit().
 """
 
 import copy
@@ -43,14 +46,26 @@ IMG_SHAPE = (32, 32, 3)
 # Shared job state
 # ---------------------------------------------------------------------------
 
+# Job status: idle | loading | training | stopping | evaluating | done | stopped | error
+_ACTIVE = ("loading", "training", "stopping", "evaluating")
+
 _lock = threading.Lock()
-_job = {"status": "idle"}  # idle | loading | training | evaluating | done | error
+_stop_event = threading.Event()
+_job = {"status": "idle"}
 _data_cache = {"label_mode": None, "data": None}
 
 
 def _update(**fields):
     with _lock:
         _job.update(fields)
+
+
+def _set_phase(phase, **fields):
+    """Change the job status without cancelling a pending stop request."""
+    with _lock:
+        if _job.get("status") == "stopping" and phase in ("loading", "training"):
+            phase = "stopping"
+        _job.update(status=phase, **fields)
 
 
 def get_status():
@@ -60,7 +75,17 @@ def get_status():
 
 
 def is_running():
-    return get_status()["status"] in ("loading", "training", "evaluating")
+    return get_status()["status"] in _ACTIVE
+
+
+def request_stop():
+    """Ask the running job to stop. Returns True if a stop was requested."""
+    with _lock:
+        if _job.get("status") not in ("loading", "training"):
+            return False
+        _stop_event.set()
+        _job["status"] = "stopping"
+        return True
 
 
 # ---------------------------------------------------------------------------
@@ -146,16 +171,24 @@ def build_model(config):
 
 
 class _ProgressCallback(Callback):
-    """Pushes the metrics of each finished epoch into the shared job state."""
+    """Reports progress to the job state and stops fit() on request."""
+
+    def on_train_batch_end(self, batch, logs=None):
+        # Checked after every batch, so a stop takes effect within seconds.
+        if _stop_event.is_set():
+            self.model.stop_training = True
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
+        if "val_loss" not in logs:
+            return  # an epoch interrupted before validation has no usable row
         row = {
             "epoch": epoch + 1,
             "loss": float(logs.get("loss", 0.0)),
             "accuracy": float(logs.get("accuracy", 0.0)),
-            "val_loss": float(logs.get("val_loss", 0.0)),
+            "val_loss": float(logs["val_loss"]),
             "val_accuracy": float(logs.get("val_accuracy", 0.0)),
+            "partial": _stop_event.is_set(),  # True if the epoch was cut short
         }
         with _lock:
             _job["history"].append(row)
@@ -196,8 +229,14 @@ def _save_history_plot(history, out_path):
 
 def _run(config, root_path):
     try:
-        _update(status="loading")
+        _set_phase("loading")
         (x_train, y_train), (x_test, y_test) = _load_data(config["label_mode"])
+
+        # A stop requested during the download cannot interrupt it, but we
+        # can skip the training entirely once the data is there.
+        if _stop_event.is_set():
+            _update(status="stopped", finished_at=time.time())
+            return
 
         model = build_model(config)
         optimizer = OPTIMIZERS[config["optimizer"]](learning_rate=config["learning_rate"])
@@ -206,7 +245,7 @@ def _run(config, root_path):
             optimizer=optimizer,
             metrics=["accuracy"],
         )
-        _update(status="training", params=int(model.count_params()))
+        _set_phase("training", params=int(model.count_params()))
 
         model.fit(
             x_train,
@@ -218,26 +257,34 @@ def _run(config, root_path):
             callbacks=[_ProgressCallback()],
         )
 
-        _update(status="evaluating")
+        was_stopped = _stop_event.is_set()
+
+        _set_phase("evaluating")
         test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=0)
 
-        plot_dir = os.path.join(root_path, "static", "cnn")
-        os.makedirs(plot_dir, exist_ok=True)
-        _save_history_plot(get_status()["history"], os.path.join(plot_dir, "history.png"))
+        plot_file = None
+        history = get_status()["history"]
+        if history:
+            plot_dir = os.path.join(root_path, "static", "cnn")
+            os.makedirs(plot_dir, exist_ok=True)
+            _save_history_plot(history, os.path.join(plot_dir, "history.png"))
+            plot_file = "cnn/history.png"
 
         # Saving the model is a bonus: a failure here must not fail the job.
-        try:
-            model_dir = os.path.join(root_path, "saved_models")
-            os.makedirs(model_dir, exist_ok=True)
-            model.save(os.path.join(model_dir, "cifar100_cnn.keras"))
-        except Exception:
-            pass
+        # A model stopped on purpose is not saved, so it never replaces a good one.
+        if not was_stopped:
+            try:
+                model_dir = os.path.join(root_path, "saved_models")
+                os.makedirs(model_dir, exist_ok=True)
+                model.save(os.path.join(model_dir, "cifar100_cnn.keras"))
+            except Exception:
+                pass
 
         _update(
-            status="done",
+            status="stopped" if was_stopped else "done",
             test_loss=float(test_loss),
             test_accuracy=float(test_accuracy),
-            plot_file="cnn/history.png",
+            plot_file=plot_file,
             finished_at=time.time(),
         )
     except Exception as exc:  # shown to the user in the dashboard
@@ -247,8 +294,9 @@ def _run(config, root_path):
 def start_training(config, root_path):
     """Start a background training job. Returns False if one is already running."""
     with _lock:
-        if _job["status"] in ("loading", "training", "evaluating"):
+        if _job["status"] in _ACTIVE:
             return False
+        _stop_event.clear()
         _job.clear()
         _job.update(
             status="loading",

@@ -64,6 +64,12 @@ def train():
     return redirect(url_for("cnn.dashboard"))
 
 
+@cnn_bp.route("/stop", methods=["POST"])
+def stop():
+    """Ask the running training to stop (used by the Stop button)."""
+    return jsonify({"ok": cnn_service.request_stop()})
+
+
 @cnn_bp.route("/status", methods=["GET"])
 def status():
     """JSON endpoint polled by the dashboard while training runs."""
