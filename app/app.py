@@ -72,11 +72,13 @@ def create_app():
     from routes.influxdb import influx_bp
     from routes.mnist import mnist_bp
     from routes.random_forest import rf_bp
+    from routes.mlp import mlp_bp
 
     app.register_blueprint(chinook_bp)
     app.register_blueprint(influx_bp)
     app.register_blueprint(mnist_bp)
     app.register_blueprint(rf_bp)
+    app.register_blueprint(mlp_bp)
 
     return app
 
