@@ -213,7 +213,7 @@ CIFAR-100 CNN · TensorFlow
     const STOPPABLE = ["loading", "training", "stopping"];
     const LABELS = {
         idle: "Idle: no training yet.",
-        loading: "Loading CIFAR-100 (the first run downloads the dataset)...",
+        loading: "Loading CIFAR-100...",
         training: "Training...",
         stopping: "Stopping after the current batch...",
         evaluating: "Evaluating on the test set...",
@@ -224,13 +224,28 @@ CIFAR-100 CNN · TensorFlow
 
     const el = (id) => document.getElementById(id);
     const pct = (x) => (x * 100).toFixed(2) + " %";
+    const mb = (bytes) => ((bytes || 0) / 1048576).toFixed(1);
     let timer = null;
 
     function render(s) {
         const running = RUNNING.includes(s.status);
 
+        // Percentage shown by the progress bar (null = use the epoch counter)
+        let percent = null;
         let label = LABELS[s.status] || s.status;
-        if (running) {
+
+        if (s.status === "loading" && s.load_step === "downloading") {
+            const total = s.download_total || 0;
+            percent = total ? Math.min(100, Math.round((s.download_done / total) * 100)) : 0;
+            label = "Downloading CIFAR-100: " + percent + " % (" + mb(s.download_done) +
+                " / " + mb(total) + " MB)";
+        } else if (s.status === "loading" && s.load_step === "preparing") {
+            percent = 100;
+            label = "Preparing the dataset: extracting and saving a local copy (one time only)...";
+        } else if (s.status === "loading") {
+            percent = 100;
+            label = "Reading the CIFAR-100 dataset...";
+        } else if (s.status === "training" || s.status === "evaluating") {
             label += " (epoch " + (s.epoch || 0) + "/" + (s.total_epochs || "?") + ")";
         }
         el("status-text").textContent = label;
@@ -247,8 +262,11 @@ CIFAR-100 CNN · TensorFlow
 
         el("progress-wrap").classList.toggle("d-none", !running);
         if (running) {
-            const total = s.total_epochs || 1;
-            el("progress-bar").style.width = Math.round(((s.epoch || 0) / total) * 100) + "%";
+            if (percent === null) {
+                const total = s.total_epochs || 1;
+                percent = Math.round(((s.epoch || 0) / total) * 100);
+            }
+            el("progress-bar").style.width = percent + "%";
         }
 
         const errorBox = el("error-text");
@@ -262,6 +280,7 @@ CIFAR-100 CNN · TensorFlow
             el("result-score").textContent = pct(s.test_accuracy);
             el("result-detail").textContent = "test loss " + s.test_loss.toFixed(4) +
                 " · " + s.params.toLocaleString() + " parameters" +
+                (s.data_source ? " · data: " + s.data_source : "") +
                 (s.status === "stopped" ? " · training stopped early" : "");
         }
 
