@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, app, render_template
 from models.chinook import Artist, Album, Genre, Track, Customer, Invoice, InvoiceLine
 from influxdb_flask import InfluxDB
 import os
@@ -72,8 +72,10 @@ def create_app():
     from routes.influxdb import influx_bp
     from routes.mnist import mnist_bp
     from routes.random_forest import rf_bp
+    from routes.cnn import cnn_bp
     from routes.mlp import mlp_bp
-
+    
+    app.register_blueprint(cnn_bp)
     app.register_blueprint(chinook_bp)
     app.register_blueprint(influx_bp)
     app.register_blueprint(mnist_bp)

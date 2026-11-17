@@ -36,3 +36,12 @@ Thumbs.db
 # Matplotlib
 *.png
 *.jpg
+
+# PW3: trained models, plots and the local CIFAR-100 dataset
+saved_models/
+*.keras
+static/cnn/
+app/data/
+
+# PW5: the Google Earth screenshot must stay in the repo despite the *.png rule above
+!data/google_earth.png

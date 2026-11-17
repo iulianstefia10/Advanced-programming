@@ -4,21 +4,28 @@ Training runs in a background thread so the Flask request returns immediately.
 The state of the current job lives in memory (module level), so run the app
 with a single process (Flask dev server, or one gunicorn worker).
 
-The user can stop a running training: request_stop() sets a flag, a Keras
-callback notices it after the current batch and stops fit().
+The CIFAR-100 dataset is stored in the project, in <app>/data/cifar100.npz:
+  * if the file exists it is simply read (no internet needed),
+  * otherwise it is downloaded once, with a live percentage, converted and saved
+    there, so every later training (even after the container is recreated) reuses it.
+
+The user can stop a running job (download or training): request_stop() sets a
+flag that the downloader and a Keras callback check regularly.
 """
 
 import copy
 import os
+import pickle
+import tarfile
 import threading
 import time
+import urllib.request
 
 import numpy as np
 from matplotlib.figure import Figure
 
 from tensorflow.keras import Input
 from tensorflow.keras.callbacks import Callback
-from tensorflow.keras.datasets import cifar100
 from tensorflow.keras.layers import Conv2D, Dense, Flatten, MaxPooling2D
 from tensorflow.keras.losses import sparse_categorical_crossentropy
 from tensorflow.keras.models import Sequential
@@ -42,6 +49,12 @@ LABEL_MODES = {"fine": 100, "coarse": 20}  # label_mode -> number of classes
 
 IMG_SHAPE = (32, 32, 3)
 
+# Dataset location (same archive that keras.datasets.cifar100 downloads).
+CIFAR100_URL = "https://www.cs.toronto.edu/~kriz/cifar-100-python.tar.gz"
+ARCHIVE_NAME = "cifar-100-python.tar.gz"
+ARCHIVE_SIZE = 169001437  # bytes, only used if the server sends no Content-Length
+LOCAL_DATA_FILE = "cifar100.npz"
+
 # ---------------------------------------------------------------------------
 # Shared job state
 # ---------------------------------------------------------------------------
@@ -52,7 +65,11 @@ _ACTIVE = ("loading", "training", "stopping", "evaluating")
 _lock = threading.Lock()
 _stop_event = threading.Event()
 _job = {"status": "idle"}
-_data_cache = {"label_mode": None, "data": None}
+_data_cache = {"label_mode": None, "data": None, "source": None}
+
+
+class _StopRequested(Exception):
+    """Raised inside the job thread when the user pressed Stop."""
 
 
 def _update(**fields):
@@ -131,14 +148,97 @@ def parse_config(form):
 
 
 # ---------------------------------------------------------------------------
-# Data and model
+# Dataset: local file, download with progress, conversion
 # ---------------------------------------------------------------------------
 
-def _load_data(label_mode):
-    """Load CIFAR-100 (uint8), keeping only the last label_mode in memory."""
+def _download_archive(data_dir):
+    """Download the CIFAR-100 archive, publishing progress and honouring Stop.
+
+    The data goes to a .part file that is renamed only when complete, so an
+    interrupted download never leaves a broken archive behind.
+    """
+    os.makedirs(data_dir, exist_ok=True)
+    final_path = os.path.join(data_dir, ARCHIVE_NAME)
+    part_path = final_path + ".part"
+    _update(load_step="downloading", download_done=0, download_total=ARCHIVE_SIZE)
+
+    finished = False
+    try:
+        with urllib.request.urlopen(CIFAR100_URL, timeout=30) as response, \
+                open(part_path, "wb") as out:
+            total = int(response.headers.get("Content-Length") or ARCHIVE_SIZE)
+            _update(download_total=total)
+            done = 0
+            while True:
+                if _stop_event.is_set():
+                    raise _StopRequested()
+                chunk = response.read(1 << 16)  # small chunks: smooth progress, quick Stop
+                if not chunk:
+                    break
+                out.write(chunk)
+                done += len(chunk)
+                _update(download_done=done)
+        os.replace(part_path, final_path)
+        finished = True
+    finally:
+        if not finished and os.path.exists(part_path):
+            os.remove(part_path)
+    return final_path
+
+
+def _build_local_file(archive_path, npz_path):
+    """Convert the downloaded archive into one compact local .npz file.
+
+    The archive stores images as rows of 3072 values (1024 red, 1024 green,
+    1024 blue); they are reshaped to (N, 32, 32, 3) like Keras does.
+    """
+    arrays = {}
+    with tarfile.open(archive_path, "r:gz") as tar:
+        for split in ("train", "test"):
+            member = tar.extractfile(f"cifar-100-python/{split}")
+            if member is None:
+                raise ValueError(f"'{split}' file not found in the CIFAR-100 archive.")
+            batch = pickle.load(member, encoding="bytes")
+            images = np.asarray(batch[b"data"], dtype=np.uint8)
+            arrays[f"x_{split}"] = images.reshape(-1, 3, 32, 32).transpose(0, 2, 3, 1)
+            arrays[f"y_{split}_fine"] = np.asarray(batch[b"fine_labels"])
+            arrays[f"y_{split}_coarse"] = np.asarray(batch[b"coarse_labels"])
+
+    tmp_path = npz_path[: -len(".npz")] + ".tmp.npz"
+    np.savez_compressed(tmp_path, **arrays)
+    os.replace(tmp_path, npz_path)
+
+
+def _load_local(path, label_mode):
+    """Read CIFAR-100 from the local cifar100.npz file."""
+    with np.load(path) as data:
+        x_train, x_test = data["x_train"], data["x_test"]
+        y_train = data[f"y_train_{label_mode}"].reshape(-1, 1)
+        y_test = data[f"y_test_{label_mode}"].reshape(-1, 1)
+    return (x_train, y_train), (x_test, y_test)
+
+
+def _load_data(label_mode, root_path):
+    """Return CIFAR-100 as normalized float32 arrays, keeping the last one in memory."""
     if _data_cache["label_mode"] != label_mode:
-        _data_cache["data"] = cifar100.load_data(label_mode=label_mode)
+        data_dir = os.path.join(root_path, "data")
+        npz_path = os.path.join(data_dir, LOCAL_DATA_FILE)
+
+        if os.path.exists(npz_path):
+            _update(load_step="reading")
+            source = "local file"
+        else:
+            archive_path = _download_archive(data_dir)
+            _update(load_step="preparing")
+            _build_local_file(archive_path, npz_path)
+            os.remove(archive_path)
+            source = "download"
+
+        _update(load_step="reading")
+        _data_cache["data"] = _load_local(npz_path, label_mode)
+        _data_cache["source"] = source
         _data_cache["label_mode"] = label_mode
+
     (x_train, y_train), (x_test, y_test) = _data_cache["data"]
     # Normalize to [0, 1]: inputs should never be fed raw 0-255 to the network.
     return (
@@ -146,6 +246,10 @@ def _load_data(label_mode):
         (x_test.astype("float32") / 255, y_test),
     )
 
+
+# ---------------------------------------------------------------------------
+# Model
+# ---------------------------------------------------------------------------
 
 def build_model(config):
     """Same architecture as the assignment, with configurable sizes.
@@ -229,12 +333,15 @@ def _save_history_plot(history, out_path):
 
 def _run(config, root_path):
     try:
-        _set_phase("loading")
-        (x_train, y_train), (x_test, y_test) = _load_data(config["label_mode"])
+        _set_phase("loading", load_step="reading")
+        try:
+            (x_train, y_train), (x_test, y_test) = _load_data(config["label_mode"], root_path)
+        except _StopRequested:
+            _update(status="stopped", finished_at=time.time())
+            return
+        _update(data_source=_data_cache["source"])
 
-        # A stop requested during the download cannot interrupt it, but we
-        # can skip the training entirely once the data is there.
-        if _stop_event.is_set():
+        if _stop_event.is_set():  # Stop pressed while the data was being read
             _update(status="stopped", finished_at=time.time())
             return
 
