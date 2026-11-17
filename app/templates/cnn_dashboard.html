@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}
+CIFAR-100 CNN · TensorFlow
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-images"></i>
+        DEEP LEARNING &middot; TENSORFLOW
+    </div>
+
+    <h1>
+        CIFAR-100 <span>CNN.</span>
+    </h1>
+
+    <p>
+        Train a convolutional neural network on the CIFAR-100 image dataset,
+        change the hyperparameters and follow the training live.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    {% if error %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="database-card" style="border-color: #ff304f;">
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Invalid parameters</h3>
+                <p class="mb-0">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Card 1: Hyperparameters -->
+        <div class="col-lg-5">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-sliders"></i>
+                </div>
+
+                <h3>Hyperparameters</h3>
+
+                <form action="{{ url_for('cnn.train') }}" method="POST">
+
+                    <div class="mb-3">
+                        <label for="epochs" class="form-label">epochs</label>
+                        <input type="number" name="epochs" id="epochs"
+                               min="1" max="100" step="1" value="{{ values.epochs }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="batch_size" class="form-label">batch_size</label>
+                        <input type="number" name="batch_size" id="batch_size"
+                               min="8" max="1024" step="1" value="{{ values.batch_size }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="optimizer" class="form-label">optimizer</label>
+                        <select name="optimizer" id="optimizer"
+                                class="form-select bg-dark text-white border-secondary">
+                            {% for name in optimizers %}
+                            <option value="{{ name }}" {% if values.optimizer == name %}selected{% endif %}>{{ name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="learning_rate" class="form-label">learning_rate</label>
+                        <input type="number" name="learning_rate" id="learning_rate"
+                               min="0.000001" max="1" step="any" value="{{ values.learning_rate }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="validation_split" class="form-label">validation_split</label>
+                        <input type="number" name="validation_split" id="validation_split"
+                               min="0.05" max="0.5" step="0.05" value="{{ values.validation_split }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="label_mode" class="form-label">labels</label>
+                        <select name="label_mode" id="label_mode"
+                                class="form-select bg-dark text-white border-secondary">
+                            {% for mode, n in label_modes.items() %}
+                            <option value="{{ mode }}" {% if values.label_mode == mode %}selected{% endif %}>
+                                {{ mode }} ({{ n }} classes)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="filters" class="form-label">filters (first conv layer, doubles each block)</label>
+                        <input type="number" name="filters" id="filters"
+                               min="4" max="128" step="1" value="{{ values.filters }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="kernel_size" class="form-label">kernel_size (2 to 4)</label>
+                        <input type="number" name="kernel_size" id="kernel_size"
+                               min="2" max="4" step="1" value="{{ values.kernel_size }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="dense_units" class="form-label">dense_units (second dense layer is half)</label>
+                        <input type="number" name="dense_units" id="dense_units"
+                               min="8" max="1024" step="1" value="{{ values.dense_units }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <button type="submit" id="train-button"
+                            class="btn-modern w-100 border-0" style="cursor: pointer;">
+                        Start training
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+
+                </form>
+
+            </div>
+        </div>
+
+
+        <!-- Card 2: Training status and result -->
+        <div class="col-lg-7">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-bar-chart"></i>
+                </div>
+
+                <h3>Result</h3>
+
+                <p id="status-text">Idle: no training yet.</p>
+
+                <div class="progress mb-3 d-none" id="progress-wrap"
+                     style="height: 1rem; background: rgba(255,255,255,0.08);">
+                    <div class="progress-bar" id="progress-bar" role="progressbar"
+                         style="width: 0%; background-color: #ff304f;"></div>
+                </div>
+
+                <button type="button" id="stop-button"
+                        class="btn-outline-modern w-100 justify-content-center mb-3 d-none"
+                        style="cursor: pointer;">
+                    <i class="bi bi-stop-circle"></i>
+                    Stop training
+                </button>
+
+                <div class="p-3 rounded mb-3 d-none" id="error-text"
+                     style="border: 1px solid #ff304f; color: #ddd;"></div>
+
+                <div class="my-3 d-none" id="result">
+                    <span id="result-score"
+                          style="font-size: 3rem; font-weight: 800; color: #ff304f; line-height: 1;"></span>
+                    <p class="mt-2 mb-0">accuracy on the test set</p>
+                    <p class="mb-0" id="result-detail"></p>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm text-center align-middle mb-0 d-none"
+                           id="history-table">
+                        <thead>
+                            <tr>
+                                <th>epoch</th>
+                                <th>loss</th>
+                                <th>accuracy</th>
+                                <th>val_loss</th>
+                                <th>val_accuracy</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <img id="plot" class="img-fluid rounded mt-3 d-none"
+                     alt="Loss and accuracy history">
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+<script>
+    const STATUS_URL = "{{ url_for('cnn.status') }}";
+    const STOP_URL = "{{ url_for('cnn.stop') }}";
+    const RUNNING = ["loading", "training", "stopping", "evaluating"];
+    const STOPPABLE = ["loading", "training", "stopping"];
+    const LABELS = {
+        idle: "Idle: no training yet.",
+        loading: "Loading CIFAR-100 (the first run downloads the dataset)...",
+        training: "Training...",
+        stopping: "Stopping after the current batch...",
+        evaluating: "Evaluating on the test set...",
+        done: "Training finished.",
+        stopped: "Training stopped.",
+        error: "Training failed."
+    };
+
+    const el = (id) => document.getElementById(id);
+    const pct = (x) => (x * 100).toFixed(2) + " %";
+    let timer = null;
+
+    function render(s) {
+        const running = RUNNING.includes(s.status);
+
+        let label = LABELS[s.status] || s.status;
+        if (running) {
+            label += " (epoch " + (s.epoch || 0) + "/" + (s.total_epochs || "?") + ")";
+        }
+        el("status-text").textContent = label;
+
+        const button = el("train-button");
+        button.disabled = running;
+        button.style.opacity = running ? "0.5" : "1";
+        button.style.cursor = running ? "not-allowed" : "pointer";
+
+        const stopButton = el("stop-button");
+        stopButton.classList.toggle("d-none", !STOPPABLE.includes(s.status));
+        stopButton.disabled = s.status === "stopping";
+        stopButton.style.opacity = s.status === "stopping" ? "0.5" : "1";
+
+        el("progress-wrap").classList.toggle("d-none", !running);
+        if (running) {
+            const total = s.total_epochs || 1;
+            el("progress-bar").style.width = Math.round(((s.epoch || 0) / total) * 100) + "%";
+        }
+
+        const errorBox = el("error-text");
+        errorBox.classList.toggle("d-none", s.status !== "error");
+        errorBox.textContent = s.error || "";
+
+        const finished = (s.status === "done" || s.status === "stopped") && s.test_accuracy !== undefined;
+        const result = el("result");
+        result.classList.toggle("d-none", !finished);
+        if (finished) {
+            el("result-score").textContent = pct(s.test_accuracy);
+            el("result-detail").textContent = "test loss " + s.test_loss.toFixed(4) +
+                " · " + s.params.toLocaleString() + " parameters" +
+                (s.status === "stopped" ? " · training stopped early" : "");
+        }
+
+        const history = s.history || [];
+        const table = el("history-table");
+        table.classList.toggle("d-none", history.length === 0);
+        const body = table.querySelector("tbody");
+        body.replaceChildren();
+        history.forEach((row) => {
+            const tr = document.createElement("tr");
+            [row.partial ? row.epoch + " (stopped)" : row.epoch, row.loss.toFixed(4), pct(row.accuracy), row.val_loss.toFixed(4), pct(row.val_accuracy)]
+                .forEach((value) => {
+                    const td = document.createElement("td");
+                    td.textContent = value;
+                    tr.appendChild(td);
+                });
+            body.appendChild(tr);
+        });
+
+        const plot = el("plot");
+        if (s.plot_url) {
+            if (!plot.src.endsWith(s.plot_url)) plot.src = s.plot_url;
+            plot.classList.remove("d-none");
+        } else {
+            plot.classList.add("d-none");
+        }
+
+        return running;
+    }
+
+    async function poll() {
+        try {
+            const response = await fetch(STATUS_URL);
+            const s = await response.json();
+            if (!render(s)) {
+                clearInterval(timer);
+                timer = null;
+            }
+        } catch (err) {
+            el("status-text").textContent = "Cannot reach the server: " + err;
+        }
+    }
+
+    el("stop-button").addEventListener("click", async () => {
+        try {
+            await fetch(STOP_URL, { method: "POST" });
+        } catch (err) {
+            el("status-text").textContent = "Cannot reach the server: " + err;
+        }
+        poll();
+        if (!timer) timer = setInterval(poll, 2000);
+    });
+
+    poll();
+    timer = setInterval(poll, 2000);
+</script>
+
+{% endblock %}
