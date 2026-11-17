@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}
+MLP · TensorFlow MNIST
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-diagram-3"></i>
+        DEEP LEARNING &middot; TENSORFLOW
+    </div>
+
+    <h1>
+        MNIST <span>MLP.</span>
+    </h1>
+
+    <p>
+        Train a fully connected neural network on the 70,000 MNIST digits,
+        change the architecture and the training hyperparameters
+        and run a sensitivity study.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    {% if errors %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="database-card" style="border-color: #ff304f;">
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Invalid parameters</h3>
+                <ul class="mb-0">
+                    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Card 1: Hyperparameters -->
+        <div class="col-lg-5">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-sliders"></i>
+                </div>
+
+                <h3>Hyperparameters</h3>
+
+                <form action="{{ url_for('mlp.dashboard') }}" method="POST"
+                      onsubmit="document.getElementById('mlp-loading').classList.remove('d-none')">
+
+                    <h6 class="mt-3 text-uppercase small">Architecture</h6>
+
+                    <div class="mb-3">
+                        <label for="hidden_layers" class="form-label">Hidden layers (neurons per layer)</label>
+                        <input type="text" name="hidden_layers" id="hidden_layers"
+                               value="{{ params.hidden_layers }}" placeholder="empty = no hidden layer"
+                               class="form-control bg-dark text-white border-secondary">
+                        <div class="form-text text-secondary">e.g. 128,64,32 &middot; empty = the subject's model</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="activation" class="form-label">Activation (hidden layers)</label>
+                        <select name="activation" id="activation" class="form-select bg-dark text-white border-secondary">
+                            {% for a in activations %}
+                            <option value="{{ a }}" {% if params.activation == a %}selected{% endif %}>{{ a }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <h6 class="mt-4 text-uppercase small">Training</h6>
+
+                    <div class="mb-3">
+                        <label for="optimizer" class="form-label">Optimizer</label>
+                        <select name="optimizer" id="optimizer" class="form-select bg-dark text-white border-secondary">
+                            {% for o in optimizers %}
+                            <option value="{{ o }}" {% if params.optimizer == o %}selected{% endif %}>{{ o }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="loss" class="form-label">Loss</label>
+                        <select name="loss" id="loss" class="form-select bg-dark text-white border-secondary">
+                            {% for l in losses %}
+                            <option value="{{ l }}" {% if params.loss == l %}selected{% endif %}>{{ l }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text text-secondary">labels are one-hot, so sparse_categorical_crossentropy is not offered</div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-4 mb-3">
+                            <label for="batch_size" class="form-label">batch_size</label>
+                            <input type="number" name="batch_size" id="batch_size" value="{{ params.batch_size }}"
+                                   class="form-control bg-dark text-white border-secondary">
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label for="epochs" class="form-label">epochs</label>
+                            <input type="number" name="epochs" id="epochs" value="{{ params.epochs }}"
+                                   class="form-control bg-dark text-white border-secondary">
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label for="validation_split" class="form-label">validation_split</label>
+                            <input type="number" name="validation_split" id="validation_split" step="0.05"
+                                   value="{{ params.validation_split }}"
+                                   class="form-control bg-dark text-white border-secondary">
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" name="normalize" id="normalize"
+                               {% if params.normalize %}checked{% endif %}>
+                        <label class="form-check-label" for="normalize">
+                            Normalize pixels (divide by 255) &middot; unticked = the subject's code
+                        </label>
+                    </div>
+
+                    <button type="submit" name="action" value="train"
+                            class="btn-modern w-100 border-0 mb-4" style="cursor: pointer;">
+                        Train model
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+
+                    <h6 class="text-uppercase small">Sensitivity study</h6>
+
+                    <div class="mb-2">
+                        <label for="study_param" class="form-label">Parameter to vary (the others keep the values above)</label>
+                        <select name="study_param" id="study_param" class="form-select bg-dark text-white border-secondary">
+                            {% for name, values in study_values.items() %}
+                            <option value="{{ name }}" {% if study_param == name %}selected{% endif %}>
+                                {{ name }}: {% for v in values %}{{ v if v != "" else "none" }}{% if not loop.last %} / {% endif %}{% endfor %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="full_data" id="full_data"
+                               {% if full_data %}checked{% endif %}>
+                        <label class="form-check-label" for="full_data">
+                            Use all 60,000 training images (default {{ "{:,}".format(study_limit) }}, much faster)
+                        </label>
+                    </div>
+
+                    <button type="submit" name="action" value="study"
+                            class="btn-outline-modern w-100 justify-content-center" style="cursor: pointer;">
+                        <i class="bi bi-table"></i>
+                        Run sensitivity study
+                    </button>
+
+                    <p id="mlp-loading" class="d-none mt-3 mb-0">
+                        <i class="bi bi-hourglass-split"></i>
+                        Training&hellip; this can take up to a minute.
+                    </p>
+
+                </form>
+
+            </div>
+        </div>
+
+
+        <!-- Card 2: Result -->
+        <div class="col-lg-7">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-bar-chart"></i>
+                </div>
+
+                {% if result %}
+                <h3>Result · MNIST</h3>
+
+                <p>
+                    layers {{ result.params.hidden_layers or "none" }}
+                    &middot; {{ result.params.activation }} &middot; {{ result.params.optimizer }}
+                    &middot; batch {{ result.params.batch_size }} &middot; {{ result.params.epochs }} epochs
+                    &middot; normalize {{ "yes" if result.params.normalize else "no" }}
+                </p>
+
+                <div class="my-3">
+                    <span style="font-size: 3rem; font-weight: 800; color: #ff304f; line-height: 1;">
+                        {{ "%.4f"|format(result.test_accuracy) }}
+                    </span>
+                    <p class="mt-2 mb-0">Accuracy on the test set (10,000 images)</p>
+                </div>
+
+                <p>
+                    Test loss: <strong>{{ "%.4f"|format(result.test_loss) }}</strong>
+                    &middot; Parameters: <strong>{{ "{:,}".format(result.num_params) }}</strong>
+                    &middot; Training time: <strong>{{ result.train_time }} s</strong><br>
+                    <em>Subject's model: test loss 2.7978, accuracy 0.8993, 7,850 parameters.</em>
+                </p>
+
+                <h6 class="mt-4">Accuracy per epoch</h6>
+                <svg id="mlp-chart" width="100%" height="260"></svg>
+                <p class="small mb-0">
+                    <span style="color:#ff304f">&#9632;</span> train accuracy &nbsp;
+                    <span style="color:#4dabf7">&#9632;</span> validation accuracy
+                </p>
+
+                <script type="application/json" id="mlp-history">{{ result.history | tojson }}</script>
+                <script>
+                (function () {
+                    const h = JSON.parse(document.getElementById("mlp-history").textContent);
+                    const series = [[h.accuracy, "#ff304f"], [h.val_accuracy, "#4dabf7"]].filter(s => s[0].length);
+                    const svg = document.getElementById("mlp-chart");
+                    const W = svg.clientWidth || 600, H = 260, P = 44;
+                    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+                    const all = series.flatMap(s => s[0]);
+                    if (!all.length) return;
+                    const n = Math.max(...series.map(s => s[0].length));
+                    const lo = Math.max(0, Math.min(...all) - 0.02), hi = Math.min(1, Math.max(...all) + 0.02);
+                    const x = i => P + (n === 1 ? (W - 2 * P) / 2 : i * (W - 2 * P) / (n - 1));
+                    const y = v => H - P - (v - lo) / ((hi - lo) || 1) * (H - 2 * P);
+                    let out = `<line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="#555"/>`
+                            + `<line x1="${P}" y1="${P}" x2="${P}" y2="${H-P}" stroke="#555"/>`
+                            + `<text x="4" y="${y(hi)+4}" font-size="11" fill="#aaa">${hi.toFixed(3)}</text>`
+                            + `<text x="4" y="${y(lo)+4}" font-size="11" fill="#aaa">${lo.toFixed(3)}</text>`
+                            + `<text x="${W/2-30}" y="${H-10}" font-size="11" fill="#aaa">epoch 1 – ${n}</text>`;
+                    for (const [vals, color] of series) {
+                        out += `<polyline fill="none" stroke="${color}" stroke-width="2" points="${vals.map((v, i) => `${x(i)},${y(v)}`).join(" ")}"/>`;
+                        vals.forEach((v, i) => {
+                            out += `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="${color}"><title>epoch ${i + 1}: ${v.toFixed(4)}</title></circle>`;
+                        });
+                    }
+                    svg.innerHTML = out;
+                })();
+                </script>
+
+                {% elif study %}
+                {% set best = study | map(attribute="test_accuracy") | max %}
+                <h3>Sensitivity study · {{ study_param }}</h3>
+
+                <p>
+                    Only <strong>{{ study_param }}</strong> changes, the other hyperparameters keep the values of the form.
+                    {% if not full_data %}Trained on the first {{ "{:,}".format(study_limit) }} images.{% endif %}
+                    The best value is highlighted.
+                </p>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm text-center align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>{{ study_param }}</th>
+                                <th>Test accuracy</th>
+                                <th>Test loss</th>
+                                <th>Parameters</th>
+                                <th>Time (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in study %}
+                            <tr{% if row.test_accuracy == best %} style="font-weight: 700; color: #ff304f;"{% endif %}>
+                                <th>{{ row.value }}</th>
+                                <td>{{ "%.4f"|format(row.test_accuracy) }}</td>
+                                <td>{{ "%.4f"|format(row.test_loss) }}</td>
+                                <td>{{ "{:,}".format(row.num_params) }}</td>
+                                <td>{{ row.train_time }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% else %}
+                <h3>Result</h3>
+                <p>
+                    Choose the architecture and the training hyperparameters,
+                    then train the model or run the sensitivity study.
+                    5 epochs take about 15–30 seconds.
+                </p>
+                {% endif %}
+
+            </div>
+        </div>
+
+
+        <!-- Card 3: Role of the hyperparameters -->
+        <div class="col-12">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-info-circle"></i>
+                </div>
+
+                <h3>Role of each hyperparameter</h3>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <tbody>
+                            <tr><th>activation</th><td>Adds non-linearity. Without it, several Dense layers work like one linear layer.</td></tr>
+                            <tr><th>hidden layers / neurons</th><td>Size of the model. Too small underfits, too big is slow and can overfit.</td></tr>
+                            <tr><th>loss</th><td>What the model minimises. It must match the label format (one-hot here).</td></tr>
+                            <tr><th>optimizer</th><td>How the weights are updated. adam and rmsprop adapt the step, sgd does not.</td></tr>
+                            <tr><th>batch_size</th><td>Images per weight update. Small = more updates per epoch, big = faster epochs but fewer updates.</td></tr>
+                            <tr><th>epochs</th><td>Passes over the training data. Too few underfits, too many overfits.</td></tr>
+                            <tr><th>validation_split</th><td>Part of the training data kept aside to watch overfitting (Keras takes the last part, without shuffling).</td></tr>
+                            <tr><th>normalization</th><td>Puts the pixels between 0 and 1, so the training is stable and converges.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}
