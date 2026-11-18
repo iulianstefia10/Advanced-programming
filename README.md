@@ -392,6 +392,20 @@ To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), th
 - Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.
 - Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.
 
+## Continuous integration (Session 7)
+
+File: `.github/workflows/ci.yml` (GitHub Actions).
+
+On every push and every pull request, GitHub runs two jobs:
+1. **Unit tests** – installs Python 3.12 (the same version as the Dockerfile) and `requirements.txt`, then runs `python -m unittest discover -s tests -v`.
+2. **Docker image** – builds the image exactly like `docker compose` (`docker build -f app/Dockerfile .`), starts it and checks that the home page answers.
+
+A pull request should only be merged when both jobs have a green check mark on GitHub (tab **Actions**, or at the bottom of the pull request).
+
+Notes:
+- The tests use the real `chinook.db` file and the saved models, so no database server is needed in CI. InfluxDB is not reachable from GitHub, so the InfluxDB pages are not tested against the real server.
+- The image is about 4.3 GB because of TensorFlow, so the Docker job takes a few minutes.
+
 ## Security
 - Do not commit `.env` files or API tokens.
 - Keep credentials out of source code.

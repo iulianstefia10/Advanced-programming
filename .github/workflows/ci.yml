@@ -1,0 +1,51 @@
+# Continuous integration (Session 7)
+# On every push and pull request: install the requirements, run the tests and build the Docker image.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Python 3.12 (same as the Dockerfile)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the requirements
+        run: pip install -r requirements.txt
+
+      - name: Run the tests
+        run: python -m unittest discover -s tests -v
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      # same build as docker compose (context = project root, Dockerfile in app/)
+      - name: Build the image
+        run: docker build -f app/Dockerfile -t group4-flask .
+
+      - name: Check that the app starts
+        run: |
+          docker run -d --name app -p 5004:5004 group4-flask
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5004/ > /dev/null; then echo "The app answers"; exit 0; fi
+            sleep 2
+          done
+          docker logs app
+          exit 1
