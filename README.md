@@ -9,6 +9,7 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Explore relationships between artists and albums.
 - View statistics about tracks, genres, sales, and customers.
 - Inspect database tables and columns.
+- Group the customers into clusters with K-Means (`/chinook/clusters`).
 
 ### InfluxDB
 - Check the InfluxDB connection status.
@@ -113,6 +114,38 @@ The formulas were checked against the NOAA heat index table and the Environment 
 
 ```bash
 python -m unittest tests.test_apparent_service tests.test_apparent_route -v
+```
+
+## Chinook – Customer clusters (K-Means)
+
+Page: `http://localhost:5004/chinook/clusters`
+
+For every customer we compute, with SQLAlchemy queries:
+- the total spent (sum of the invoices),
+- the number of invoices,
+- the number of different genres bought,
+- the favourite genre and its share of the tracks bought (%).
+
+The four numbers are scaled with `StandardScaler` (they have different units) and grouped with K-Means.
+`k` is chosen in the form (2 to 10). The page shows the elbow curve, a scatter plot coloured by cluster and the table of the clusters and of the customers.
+
+Files:
+- `app/services/chinook_clusters.py` – queries, K-Means, elbow curve and plots
+- `app/routes/chinook.py` – the `/chinook/clusters` route
+- `app/templates/chinook_clusters.html` – the page
+
+### What we noticed
+
+- The elbow is around **k = 4**: the inertia goes 236 → 162 → 101 → 64, then decreases slowly.
+- With k = 4: a group of 8 big spenders who buy many genres (45.6 $, 9.5 genres), a group of 23 customers who mostly buy their favourite genre (51 % of their tracks), and a group of 27 "average" customers.
+- Chinook is a demo database: 58 of the 59 customers have exactly 7 invoices. So the number of invoices hardly separates the customers. The only customer with 6 invoices always gets a cluster of its own after scaling.
+- Rock is the favourite genre of 47 customers, so the favourite genre is more useful as a share (%) than as a name.
+- `random_state = 42` and `n_init = 10` make the result the same at every run.
+
+### Tests
+
+```bash
+python -m unittest tests.test_chinook_clusters -v
 ```
 
 ## Session 3 – Digit recognition: draw a digit, CNN and MLP
@@ -427,6 +460,20 @@ To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), th
 - The reason is the batch size of 4 and the very small model: each step sends only 4 images to the accelerator and does very little computation, so most of the time is spent on transfers and loading the data, not on computing. With bigger batches and a bigger model, the GPU and TPU would be much faster.
 - Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.
 - Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.
+
+## Continuous integration (Session 7)
+
+File: `.github/workflows/ci.yml` (GitHub Actions).
+
+On every push and every pull request, GitHub runs two jobs:
+1. **Unit tests** – installs Python 3.12 (the same version as the Dockerfile) and `requirements.txt`, then runs `python -m unittest discover -s tests -v`.
+2. **Docker image** – builds the image exactly like `docker compose` (`docker build -f app/Dockerfile .`), starts it and checks that the home page answers.
+
+A pull request should only be merged when both jobs have a green check mark on GitHub (tab **Actions**, or at the bottom of the pull request).
+
+Notes:
+- The tests use the real `chinook.db` file and the saved models, so no database server is needed in CI. InfluxDB is not reachable from GitHub, so the InfluxDB pages are not tested against the real server.
+- The image is about 4.3 GB because of TensorFlow, so the Docker job takes a few minutes.
 
 ## Security
 - Do not commit `.env` files or API tokens.
