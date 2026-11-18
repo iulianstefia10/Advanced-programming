@@ -18,8 +18,8 @@ MNIST · Image Upload & Inference
     </h1>
 
     <p>
-        Upload images to the server and run handwritten digit classification
-        using the pre-trained Convolutional Neural Network model.
+        Draw a digit or upload an image. The same 28&times;28 image is sent to the given
+        CNN model and to our MLP from PW2, so the two predictions can be compared.
     </p>
 
 </section>
@@ -31,7 +31,7 @@ MNIST · Image Upload & Inference
     <div class="row mb-4">
         <div class="col-12">
             <div class="database-card" style="border-color: #ff304f;">
-                <h3><i class="bi bi-exclamation-triangle me-2"></i>Upload Error</h3>
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Error</h3>
                 <p class="mb-0">{{ error }}</p>
             </div>
         </div>
@@ -40,35 +40,40 @@ MNIST · Image Upload & Inference
 
     <div class="row g-4">
 
-        <!-- Card 1: Upload Form -->
+        <!-- Card 1: draw or upload -->
         <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
-                    <i class="bi bi-cloud-arrow-up"></i>
+                    <i class="bi bi-pencil"></i>
                 </div>
 
-                <h3>Upload Image</h3>
+                <h3>Draw a digit</h3>
 
-                <p>
-                    Select an image file (PNG, JPG) from your device to upload and analyze.
-                </p>
+                <form action="{{ url_for('mnist.dashboard') }}" method="POST" id="drawForm">
+                    <canvas id="drawCanvas" width="280" height="280"
+                            style="width: 100%; max-width: 280px; aspect-ratio: 1; background: #fff; border-radius: 8px; touch-action: none; cursor: crosshair; display: block; margin: 0 auto;"></canvas>
+                    <input type="hidden" name="drawing" id="drawingInput">
+
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="button" id="clearCanvas" class="btn-outline-modern border-0 flex-fill justify-content-center" style="cursor: pointer;">
+                            <i class="bi bi-eraser"></i> Clear
+                        </button>
+                        <button type="submit" class="btn-modern border-0 flex-fill" style="cursor: pointer;">
+                            Predict <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </form>
+
+                <hr class="border-secondary my-4">
+
+                <p class="mb-2">Or upload an image (PNG, JPG):</p>
 
                 <form action="{{ url_for('mnist.dashboard') }}" method="POST" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <input
-                            type="file"
-                            name="file"
-                            id="fileInput"
-                            accept="image/*"
-                            class="form-control bg-dark text-white border-secondary"
-                            required
-                        >
-                    </div>
-
+                    <input type="file" name="file" accept="image/*"
+                           class="form-control bg-dark text-white border-secondary mb-3" required>
                     <button type="submit" class="btn-modern w-100 border-0" style="cursor: pointer;">
-                        Upload &amp; Predict
-                        <i class="bi bi-arrow-right"></i>
+                        Upload &amp; Predict <i class="bi bi-arrow-right"></i>
                     </button>
                 </form>
 
@@ -76,7 +81,7 @@ MNIST · Image Upload & Inference
         </div>
 
 
-        <!-- Card 2: Image Preview -->
+        <!-- Card 2: what the models see -->
         <div class="col-md-6 col-lg-4">
             <div class="database-card">
 
@@ -87,52 +92,63 @@ MNIST · Image Upload & Inference
                 <h3>Image Preview</h3>
 
                 {% if image_data %}
-                <p>
-                    Uploaded file: <strong>{{ filename }}</strong>
-                </p>
-                <div class="text-center my-3">
-                    <img
-                        src="data:image/png;base64,{{ image_data }}"
-                        alt="Uploaded Image"
-                        class="img-fluid rounded"
-                        style="max-height: 140px; border: 1px solid #333;"
-                    >
+                <div class="d-flex justify-content-around align-items-start gap-2 text-center my-3">
+                    <div style="flex: 1; min-width: 0;">
+                        <img src="data:image/png;base64,{{ image_data }}" alt="Your image"
+                             class="rounded" style="width: 100%; max-width: 140px; aspect-ratio: 1; object-fit: contain; background: #fff;">
+                        <p class="small mt-2 mb-0">{{ filename }}</p>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <img src="data:image/png;base64,{{ model_view }}" alt="28x28 model input"
+                             class="rounded" style="width: 100%; max-width: 140px; aspect-ratio: 1; image-rendering: pixelated;">
+                        <p class="small mt-2 mb-0">what the models see (28&times;28)</p>
+                    </div>
                 </div>
-                {% else %}
-                <p>
-                    No image uploaded in this session yet. Choose a file on the left to preview it here.
+                <p class="small mb-0">
+                    The digit is cropped, fitted in a 20&times;20 box, centred in 28&times;28
+                    and turned into white on black, like the MNIST images.
                 </p>
+                {% else %}
+                <p>Draw a digit or choose a file to see it here.</p>
                 {% endif %}
 
             </div>
         </div>
 
 
-        <!-- Card 3: AI Prediction Result -->
-        <div class="col-md-6 col-lg-4">
+        <!-- Card 3: predictions of the two models -->
+        <div class="col-md-12 col-lg-4">
             <div class="database-card">
 
                 <div class="database-icon">
                     <i class="bi bi-magic"></i>
                 </div>
 
-                <h3>Model Prediction</h3>
+                <h3>Model Predictions</h3>
 
-                {% if prediction is not none %}
-                <p>
-                    Predicted digit from <strong>MNIST_keras_CNN.h5</strong>:
-                </p>
-                <div class="my-3">
-                    <span style="font-size: 3rem; font-weight: 800; color: #ff304f; line-height: 1;">
-                        {{ prediction }}
-                    </span>
-                    <p class="mt-2 mb-0">
-                        Confidence: <strong>{{ confidence }}%</strong>
-                    </p>
+                {% if predictions %}
+                {% for key in ["cnn", "mlp"] %}
+                {% set p = predictions[key] %}
+                <div class="mb-4 prediction-block" data-model="{{ key }}">
+                    <p class="mb-1"><strong>{{ p.model }}</strong></p>
+                    <div class="d-flex align-items-baseline gap-3">
+                        <span class="predicted-digit" style="font-size: 2.6rem; font-weight: 800; color: #ff304f; line-height: 1;">{{ p.digit }}</span>
+                        <span>{{ p.confidence }}%</span>
+                    </div>
+                    {% for prob in p.probabilities %}
+                    <div class="d-flex align-items-center gap-2" style="font-size: 0.75rem;">
+                        <span style="width: 1em;">{{ loop.index0 }}</span>
+                        <div style="flex: 1; background: #2a2a2a; border-radius: 3px; height: 8px;">
+                            <div style="width: {{ prob }}%; background: {% if loop.index0 == p.digit %}#ff304f{% else %}#777{% endif %}; height: 8px; border-radius: 3px;"></div>
+                        </div>
+                        <span style="width: 3.5em; text-align: right;">{{ prob }}%</span>
+                    </div>
+                    {% endfor %}
                 </div>
+                {% endfor %}
                 {% else %}
                 <p>
-                    Submit an image of a digit (0–9) to view the neural network classification result.
+                    Draw or upload a digit (0–9) to compare the CNN and the MLP.
                 </p>
                 {% endif %}
 
@@ -211,5 +227,69 @@ MNIST · Image Upload & Inference
     </div>
 
 </section>
+
+<script>
+    // simple drawing canvas: black pen on a white background
+    const canvas = document.getElementById("drawCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function clearCanvas() {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    clearCanvas();
+
+    ctx.lineWidth = 18;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#000";
+
+    let drawing = false;
+    let drawn = false;
+
+    function position(event) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left) * canvas.width / rect.width,
+            y: (event.clientY - rect.top) * canvas.height / rect.height,
+        };
+    }
+
+    canvas.addEventListener("pointerdown", (event) => {
+        drawing = true;
+        drawn = true;
+        const p = position(event);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        canvas.setPointerCapture(event.pointerId);
+    });
+
+    canvas.addEventListener("pointermove", (event) => {
+        if (!drawing) return;
+        const p = position(event);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    });
+
+    canvas.addEventListener("pointerup", () => { drawing = false; });
+    canvas.addEventListener("pointercancel", () => { drawing = false; });
+
+    document.getElementById("clearCanvas").addEventListener("click", () => {
+        clearCanvas();
+        drawn = false;
+    });
+
+    document.getElementById("drawForm").addEventListener("submit", (event) => {
+        if (!drawn) {
+            event.preventDefault();
+            alert("Draw a digit first.");
+            return;
+        }
+        // the drawing is sent as a PNG image
+        document.getElementById("drawingInput").value = canvas.toDataURL("image/png");
+    });
+</script>
 
 {% endblock %}

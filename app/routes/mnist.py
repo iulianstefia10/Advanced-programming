@@ -1,11 +1,12 @@
-import os
-import io
 import base64
-import numpy as np
-from PIL import Image, ImageOps
-from flask import Blueprint, render_template, request, current_app, redirect, url_for
+import io
+import os
+
+from flask import Blueprint, current_app, redirect, render_template, request, url_for
+from PIL import Image, UnidentifiedImageError
 from werkzeug.utils import secure_filename
-from tensorflow.keras.models import load_model
+
+from services.mnist_inference import decode_data_url, predict_both, prepare_image, preview_png
 
 mnist_bp = Blueprint(
     "mnist",
@@ -13,23 +14,12 @@ mnist_bp = Blueprint(
     url_prefix="/mnist",
 )
 
-_model = None
-
-
-def get_mnist_model():
-    """Load the Keras H5 model once and cache it in memory."""
-    global _model
-    if _model is None:
-        model_path = os.path.join(current_app.root_path, "MNIST_keras_CNN.h5")
-        _model = load_model(model_path, compile=False)
-    return _model
-
 
 @mnist_bp.route("/", methods=["GET", "POST"])
 def dashboard():
-    prediction = None
-    confidence = None
+    predictions = None
     image_data = None
+    model_view = None
     filename = None
     error = None
 
@@ -37,42 +27,32 @@ def dashboard():
     os.makedirs(upload_folder, exist_ok=True)
 
     if request.method == "POST":
-        if "file" not in request.files or request.files["file"].filename == "":
-            error = "Please select a valid image file before uploading."
-        else:
-            file = request.files["file"]
-            filename = secure_filename(file.filename)
-            save_path = os.path.join(upload_folder, filename)
-
-            try:
+        try:
+            if request.form.get("drawing"):
+                # digit drawn on the canvas (sent as a PNG data URL)
+                image = decode_data_url(request.form["drawing"])
+                filename = "drawing"
+                image_data = request.form["drawing"].split(",", 1)[1]
+            elif "file" in request.files and request.files["file"].filename != "":
+                # uploaded image file, also saved in static/uploads
+                file = request.files["file"]
+                filename = secure_filename(file.filename)
                 raw_bytes = file.read()
-                with open(save_path, "wb") as f:
+                image = Image.open(io.BytesIO(raw_bytes))
+                # save it only when it really is an image
+                with open(os.path.join(upload_folder, filename), "wb") as f:
                     f.write(raw_bytes)
-
                 image_data = base64.b64encode(raw_bytes).decode("utf-8")
+            else:
+                raise ValueError("Draw a digit or choose an image file first.")
 
-                # Preprocess image for MNIST model (28x28 grayscale)
-                img = Image.open(io.BytesIO(raw_bytes)).convert("L")
-                img = ImageOps.autocontrast(img)
-                img = img.resize((28, 28))
-                im2arr = np.array(img)
+            # the same 28x28 image goes to both models
+            pixels = prepare_image(image)
+            model_view = preview_png(pixels)
+            predictions = predict_both(pixels)
 
-                # Invert colors if background is light (MNIST is white digit on black background)
-                if np.mean(im2arr) > 127:
-                    im2arr = 255 - im2arr
-
-                # Clean background noise with a soft threshold
-                im2arr = np.where(im2arr < 50, 0, im2arr)
-
-                im2arr = im2arr.reshape(1, 28, 28, 1).astype("float32") / 255.0
-
-                model = get_mnist_model()
-                predict_x = model.predict(im2arr)
-                prediction = int(np.argmax(predict_x, axis=1)[0])
-                confidence = round(float(np.max(predict_x)) * 100, 2)
-
-            except Exception as e:
-                error = f"Error processing image: {str(e)}"
+        except (ValueError, UnidentifiedImageError, OSError) as e:
+            error = str(e) if isinstance(e, ValueError) else "The file is not a valid image."
 
     uploaded_files = [
         f for f in os.listdir(upload_folder)
@@ -81,9 +61,9 @@ def dashboard():
 
     return render_template(
         "mnist_dashboard.html",
-        prediction=prediction,
-        confidence=confidence,
+        predictions=predictions,
         image_data=image_data,
+        model_view=model_view,
         filename=filename,
         uploaded_files=uploaded_files,
         error=error,
