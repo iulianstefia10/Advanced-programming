@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}
+Apparent temperature · Weather model
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-thermometer-half"></i>
+        WEATHER MODEL &middot; SESSION 1
+    </div>
+
+    <h1>
+        Apparent <span>temperature.</span>
+    </h1>
+
+    <p>
+        How hot or cold does it really feel? Change the temperature, the humidity
+        and the wind, or load the current weather from InfluxDB.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    {% if errors %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="database-card" style="border-color: #ff304f;">
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Invalid parameters</h3>
+                <ul class="mb-0">
+                    {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Card 1: Inputs -->
+        <div class="col-lg-5">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-sliders"></i>
+                </div>
+
+                <h3>Conditions</h3>
+
+                <form action="{{ url_for('apparent.dashboard') }}" method="POST">
+
+                    <div class="mb-3">
+                        <label for="temperature" class="form-label">Air temperature (°C)</label>
+                        <input type="number" name="temperature" id="temperature" step="0.1"
+                               value="{{ '%g'|format(values.temperature) }}"
+                               class="form-control bg-dark text-white border-secondary">
+                        <div class="form-text text-secondary">-50 to 60 °C</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="humidity" class="form-label">Relative humidity (%)</label>
+                        <input type="number" name="humidity" id="humidity" step="1"
+                               value="{{ '%g'|format(values.humidity) }}"
+                               class="form-control bg-dark text-white border-secondary">
+                        <div class="form-text text-secondary">0 to 100 %</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="wind" class="form-label">Wind speed (km/h, at 10 m)</label>
+                        <input type="number" name="wind" id="wind" step="0.1"
+                               value="{{ '%g'|format(values.wind) }}"
+                               class="form-control bg-dark text-white border-secondary">
+                        <div class="form-text text-secondary">0 to 200 km/h</div>
+                    </div>
+
+                    <button type="submit" name="action" value="compute"
+                            class="btn-modern w-100 border-0 mb-4" style="cursor: pointer;">
+                        Compute
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+
+                    <h6 class="text-uppercase small">Current weather (InfluxDB)</h6>
+
+                    <div class="mb-2">
+                        <label for="location" class="form-label">Station</label>
+                        <select name="location" id="location" class="form-select bg-dark text-white border-secondary">
+                            {% for l in locations %}
+                            <option value="{{ l }}" {% if l == location %}selected{% endif %}>{{ l }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <button type="submit" name="action" value="influx"
+                            class="btn-outline-modern w-100 justify-content-center" style="cursor: pointer;">
+                        <i class="bi bi-cloud-download"></i>
+                        Use the current weather
+                    </button>
+
+                </form>
+
+            </div>
+        </div>
+
+
+        <!-- Card 2: Result -->
+        <div class="col-lg-7">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-thermometer-sun"></i>
+                </div>
+
+                {% if result %}
+                <h3>Feels like</h3>
+
+                <p>
+                    {{ '%g'|format(result.temperature) }} °C &middot;
+                    {{ '%g'|format(result.humidity) }} % humidity &middot;
+                    wind {{ '%g'|format(result.wind) }} km/h
+                    {% if weather %}&middot; {{ location }}, {{ weather.time[:16].replace('T', ' ') }} UTC{% endif %}
+                </p>
+
+                <div class="my-3">
+                    <span style="font-size: 3rem; font-weight: 800; color: #ff304f; line-height: 1;">
+                        {{ '%.1f'|format(result.value) }} °C
+                    </span>
+                    <p class="mt-2 mb-0">
+                        {{ result.comfort }}
+                        ({{ '%+.1f'|format(result.difference) }} °C compared with the air)
+                    </p>
+                </div>
+
+                <p>
+                    Formula used: <strong>{{ result.formula }}</strong>
+                    {% if weather and weather.reference is defined %}
+                    <br><em>The weather service gives {{ '%.1f'|format(weather.reference) }} °C.</em>
+                    {% endif %}
+                </p>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr><th>Model</th><th>Valid when</th><th class="text-end">Value</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for m in result.models %}
+                            <tr{% if m.key == result.formula_key %} style="font-weight: 700; color: #ff304f;"{% endif %}>
+                                <td>{{ m.name }}</td>
+                                <td>{{ m.range }}{% if not m.valid %} <span class="text-secondary">(not valid here)</span>{% endif %}</td>
+                                <td class="text-end">{{ '%.1f'|format(m.value) }} °C</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <h6 class="mt-4">Same air with more wind <span class="text-secondary small">({{ result.curve.model }})</span></h6>
+                {% if result.formula_key == "heat_index" %}
+                <p class="small text-secondary mb-1">The heat index does not take the wind into account, so the curve uses the Steadman model.</p>
+                {% endif %}
+                <svg id="apparent-chart" width="100%" height="220"></svg>
+                <script type="application/json" id="apparent-curve">{{ result.curve | tojson }}</script>
+                <script>
+                (function () {
+                    const pts = JSON.parse(document.getElementById("apparent-curve").textContent).points;
+                    const svg = document.getElementById("apparent-chart");
+                    const W = svg.clientWidth || 600, H = 220, P = 44;
+                    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+                    const vals = pts.map(p => p.value);
+                    const lo = Math.min(...vals) - 1, hi = Math.max(...vals) + 1;
+                    const maxW = pts[pts.length - 1].wind;
+                    const x = w => P + w / maxW * (W - 2 * P);
+                    const y = v => H - P - (v - lo) / ((hi - lo) || 1) * (H - 2 * P);
+                    let out = `<line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="#555"/>`
+                            + `<line x1="${P}" y1="${P}" x2="${P}" y2="${H-P}" stroke="#555"/>`
+                            + `<text x="4" y="${y(hi)+4}" font-size="11" fill="#aaa">${hi.toFixed(0)} °C</text>`
+                            + `<text x="4" y="${y(lo)+4}" font-size="11" fill="#aaa">${lo.toFixed(0)} °C</text>`
+                            + `<text x="${W/2-40}" y="${H-10}" font-size="11" fill="#aaa">wind 0 – ${maxW} km/h</text>`;
+                    out += `<polyline fill="none" stroke="#ff304f" stroke-width="2" points="${pts.map(p => `${x(p.wind)},${y(p.value)}`).join(" ")}"/>`;
+                    pts.forEach(p => {
+                        out += `<circle cx="${x(p.wind)}" cy="${y(p.value)}" r="3" fill="#ff304f"><title>${p.wind} km/h: ${p.value.toFixed(1)} °C</title></circle>`;
+                    });
+                    svg.innerHTML = out;
+                })();
+                </script>
+
+                {% else %}
+                <h3>Result</h3>
+                <p>
+                    Enter the conditions and press <strong>Compute</strong>,
+                    or load the current weather of a station from InfluxDB.
+                </p>
+                {% endif %}
+
+            </div>
+        </div>
+
+
+        <!-- Card 3: The models -->
+        <div class="col-12">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-info-circle"></i>
+                </div>
+
+                <h3>How it is computed</h3>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <tbody>
+                            <tr><th>Heat index</th><td>Hot and humid air: sweat evaporates less, so it feels hotter. NOAA formula (Rothfusz regression), written in °F, so the app converts °C → °F → °C. Only valid from 27 °C and 40 % humidity.</td></tr>
+                            <tr><th>Wind chill</th><td>Cold and windy air: the wind removes heat from the skin, so it feels colder. Environment Canada formula, wind in km/h at 10 m. Only valid up to 10 °C and above 4.8 km/h.</td></tr>
+                            <tr><th>Steadman</th><td>Every other case. Uses temperature, water vapour pressure (from humidity) and wind in m/s: AT = T + 0.33 e − 0.70 ws − 4.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}
