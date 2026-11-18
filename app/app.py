@@ -1,4 +1,4 @@
-from flask import Flask, app, render_template
+from flask import Flask, render_template
 from models.chinook import Artist, Album, Genre, Track, Customer, Invoice, InvoiceLine
 from influxdb_flask import InfluxDB
 import os

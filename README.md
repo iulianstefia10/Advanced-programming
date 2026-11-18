@@ -22,6 +22,11 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Change the hyperparameters from the web page.
 - Run a sensitivity study of the score as a function of the hyperparameters.
 
+### CIFAR-100 CNN (PW3)
+- Train a convolutional neural network on CIFAR-100 (the dataset is imported by the page).
+- Change the hyperparameters from the web page (fine or coarse labels, filters, kernel size, optimizer...).
+- Follow the download and the training live, and stop them with a button.
+
 ## Technologies
 - Python
 - Flask
@@ -238,6 +243,83 @@ python -m unittest discover -s tests -v
 ```
 
 The tests check the form values, the sensitivity study, the number of parameters (7,850 and 111,146) and the `/mlp` page (form, training, errors).
+
+## PW3 – CNN on CIFAR-100 (TensorFlow)
+
+Page: `http://localhost:5004/cnn/`
+
+We added a page where you set the hyperparameters of a convolutional neural network (`filters`, `kernel_size`, `dense_units`) and of the training (`epochs`, `batch_size`, `optimizer`, `learning_rate`, `validation_split`), choose fine or coarse labels, and train it on CIFAR-100 (60,000 colour images of 32x32 pixels, 100 classes).
+The dataset is imported by the page itself. The training runs in the background: the page shows the download percentage, the epoch, the loss and the accuracy live, and a **Stop** button cancels the download or the training.
+At the end it shows the test accuracy, the test loss, the number of parameters, the table of the metrics per epoch and the loss and accuracy curves (train and validation).
+
+Files:
+- `app/services/cnn_service.py` – dataset import, checks, model, training in a thread
+- `app/routes/cnn.py` – the `/cnn` routes (`/`, `/train`, `/stop`, `/status`)
+- `app/templates/cnn_dashboard.html` – the page
+- `prepare_cifar100.py` – optional, prepares the dataset file before the first training
+
+### What we changed compared to the subject
+
+- **`cifar100.load_data()` blocks until the file is downloaded**, so a web page can neither show a percentage nor cancel it. We download the same archive ourselves (about 161 MB) and keep it in `app/data/cifar100.npz` (fine and coarse labels). The next trainings read this file, so there is no new download, even after the container is recreated. The model, the loss, the metrics and the division by 255 are those of the subject.
+- **Only fine labels** in the subject. The form also offers the 20 superclasses (coarse labels): the last layer then has 20 neurons instead of 100.
+- **The subject's code blocks until the end of the training**, which would freeze the page. We train in a background thread and the page asks `/cnn/status` regularly. Only one training can run at a time.
+- **The architecture is a hyperparameter.** `filters` is the number of filters of the first convolution (doubled at each block: 32-64-128 by default), `dense_units` the size of the first dense layer (the second one has half of it). With the default values it is exactly the model of the subject: 270,372 parameters.
+- **`kernel_size` is limited to 2–4.** With three convolutions without padding and three poolings on 32x32 images, a 5x5 kernel shrinks the image to nothing.
+- **`Input(shape=...)`** is the first layer of the model instead of `input_shape=` in the first `Conv2D`, which current Keras versions warn about.
+- **The subject only plots the validation curves.** We draw the train and the validation curves of the loss and of the accuracy, to see the overfitting.
+- Wrong values (`epochs = 0`, `kernel_size = 5`, letters…) show an error message instead of crashing the page.
+
+### Can we obtain better results?
+
+Subject: test loss 2.8492, test accuracy 0.2864 (10 epochs, batch size 50, adam, validation_split 0.2).
+Our runs use these values for everything we do not change, with 50,000 training images and the 10,000 test images.
+
+| Run | Parameters | Test loss | Test accuracy |
+|---|---|---|---|
+| Subject | 270,372 | 2.8492 | 0.2864 |
+| Default values of the page | 270,372 | 2.6540 | **0.3555** |
+| coarse labels (20 classes) | 260,052 | TODO | TODO |
+| filters = 64 | 679,012 | TODO | TODO |
+| dense_units = 512 | 512,932 | TODO | TODO |
+| learning_rate = 0.0005 | 270,372 | TODO | TODO |
+| learning_rate = 0.01 | 270,372 | TODO | TODO |
+| optimizer = rmsprop | 270,372 | TODO | TODO |
+| optimizer = sgd | 270,372 | TODO | TODO |
+| batch_size = 128 | 270,372 | TODO | TODO |
+
+What we noticed with the default values:
+- The test accuracy is 0.3555. A random guess gives 0.01 on 100 classes, so the model learned a lot, but CIFAR-100 is hard: 100 classes, small images and only 500 training images per class.
+- **The model overfits.** The training accuracy keeps rising (7.6 % at epoch 1, 46.2 % at epoch 10) but the validation accuracy stops around 34.5–34.9 % from epoch 8, and the validation loss is the lowest at epoch 9 (2.6352) then goes up again (2.6661). More epochs would not help.
+- We get a better score than the subject (0.2864) with the same architecture. Each number comes from one run, and the results change from one run to another because the weights start with random values.
+- TODO: comment the table above (coarse labels, filters, learning rate, optimizer, batch size).
+
+### Role of each hyperparameter
+
+| Hyperparameter | Role |
+|---|---|
+| epochs | Number of passes over the training data. Too few underfits, too many overfits (see the curves). |
+| batch_size | Number of images per weight update. Small = more updates per epoch, big = faster epochs but fewer updates. |
+| optimizer | How the weights are updated. adam and rmsprop adapt the step, sgd does not. |
+| learning_rate | Size of the update step. Too small is slow, too big makes the training unstable. |
+| validation_split | Part of the training data kept aside to watch the overfitting during the training. |
+| label_mode | fine = the 100 classes, coarse = the 20 superclasses (an easier problem, scores cannot be compared with fine). |
+| filters | Number of filters of the first convolution (then doubled). More filters = a bigger model that can learn more, but slower. |
+| kernel_size | Size of the area seen by each filter (2x2 to 4x4). |
+| dense_units | Size of the first dense layer after the convolutions. |
+
+### Notes
+
+- The first training downloads the dataset (about 161 MB, with a percentage on the page). The next ones start immediately.
+- The training runs on the CPU and an epoch takes minutes: use 1 or 2 epochs for a quick test.
+- The state of the training is kept in memory, so the application must run in a single process, and all the visitors see the same training.
+
+### Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The tests check the form values, the number of parameters (270,372 and 260,052 with the coarse labels), the state of the training (Stop, second training refused) and the `/cnn` page (form, wrong values, status, Stop). The training itself is replaced by a mock and the dataset is never downloaded.
 
 ## PW4 – PyTorch on CPU, GPU and TPU
 
