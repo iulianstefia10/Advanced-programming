@@ -66,6 +66,46 @@ Open the application at:
 http://localhost:5004/
 ```
 
+## Session 1 – Apparent temperature
+
+Page: `http://localhost:5004/apparent/`
+
+The first page asked in Session 1 (§5.4): a Python model that computes the apparent ("feels like") temperature from inputs the user can change, like [alpiniste.fr](https://www.alpiniste.fr/indice-chaleur-calculateur/).
+You enter the air temperature, the humidity and the wind, or press **Use the current weather** to load the last values of a station from InfluxDB (`weather_current`, Annecy by default).
+
+Files:
+- `app/services/apparent.py` – the three formulas, the choice of formula, the checks and the InfluxDB query
+- `app/routes/apparent.py` – the `/apparent` route
+- `app/templates/apparent_dashboard.html` – the page
+
+### Model
+
+One formula is not valid for every weather, so the app picks the right one:
+
+| Conditions | Formula | Why it feels different |
+|---|---|---|
+| T ≥ 27 °C and humidity ≥ 40 % | Heat index (NOAA, Rothfusz regression) | sweat evaporates less in humid air |
+| T ≤ 10 °C and wind > 4.8 km/h | Wind chill (Environment Canada) | the wind removes heat from the skin |
+| any other case | Steadman apparent temperature (Australian Bureau of Meteorology) | uses temperature, humidity and wind together |
+
+The page shows the value, the formula used, the three formulas side by side, a comfort level and how the felt temperature changes with more wind.
+
+### What we paid attention to
+
+- The **heat index formula is written in °F**: applied directly to °C it gives wrong values. We convert °C → °F → °C.
+- The heat index is **only valid in hot and humid air**; used in the cold it gives meaningless numbers. Same for the wind chill above 10 °C.
+- The wind chill uses the wind **in km/h at 10 m**, Steadman uses it **in m/s**.
+- The **heat index ignores the wind**: at 30 °C it gives the same value with or without wind. The chart "same air with more wind" therefore uses the Steadman model in warm weather and the wind chill in the cold.
+- Wrong values (letters, humidity above 100 %, negative wind…) and an unreachable InfluxDB show an error message instead of crashing the page.
+
+The formulas were checked against the NOAA heat index table and the Environment Canada wind chill table (difference below 1 °F / 0.5 °C).
+
+### Tests
+
+```bash
+python -m unittest tests.test_apparent_service tests.test_apparent_route -v
+```
+
 ## PW1 – Random Forest
 
 Page: `http://localhost:5004/rf/`
