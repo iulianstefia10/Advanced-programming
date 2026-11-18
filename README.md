@@ -18,6 +18,10 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Visualise weather measurements.
 - Format time-series data into input windows and prediction targets.
 
+### Digit recognition (Session 3)
+- Draw a digit on the page or upload an image.
+- Compare the prediction of the given CNN and of our PW2 MLP, with the probabilities.
+
 ### Random Forest (PW1)
 - Train a random forest on the iris, digits or diabetes dataset.
 - Change the hyperparameters from the web page.
@@ -143,6 +147,38 @@ Files:
 ```bash
 python -m unittest tests.test_chinook_clusters -v
 ```
+
+## Session 3 – Digit recognition: draw a digit, CNN and MLP
+
+Page: `http://localhost:5004/mnist/`
+
+You can draw a digit with the mouse (or a finger on a phone) or upload an image.
+The same prepared image is sent to two models and both predictions are shown with the probability of each digit:
+- **CNN**: `MNIST_keras_CNN.h5`, the model given in the subject,
+- **MLP**: our PW2 network (128-64-32, pixels divided by 255), trained once with `app/train_mnist_mlp.py` and saved in `app/mnist_mlp.keras` (test accuracy 0.974).
+
+Files:
+- `app/services/mnist_inference.py` – preparing the image and running the two models
+- `app/routes/mnist.py` – the `/mnist/` route (drawing or upload)
+- `app/templates/mnist_dashboard.html` – the canvas and the results
+- `app/train_mnist_mlp.py` – trains and saves the MLP (run it again only if the model must change)
+
+### What we paid attention to
+
+- The two models do not take the same input: the CNN wants an image `(1, 28, 28, 1)`, the MLP wants a vector of **784** values. Both must be divided by **255**, like during the training.
+- MNIST digits are **white on a black background**, but a drawing is black on white, so the image is inverted. A transparent background (canvas, PNG) is first made white.
+- In MNIST the digit is about 20×20 pixels and centred in 28×28. Before, the whole picture was just resized, so a digit drawn in a corner or very big was badly recognised (a 7 was predicted as 1). Now the digit is cropped, fitted in a 20×20 box and moved so that its centre of mass is in the middle. The page shows this 28×28 image ("what the models see").
+- With this preparation, on 200 MNIST test images turned into big black-on-white drawings, the CNN is right 199 times and the MLP 195 times. The CNN is a bit better on unusual shapes (for example a 6 written with a font).
+- An uploaded file is saved in `static/uploads` only if it really is an image.
+- `*.keras` files are ignored by git (PW3 models), so `app/mnist_mlp.keras` is added as an exception in `.gitignore`.
+
+### Tests
+
+```bash
+python -m unittest tests.test_mnist_inference -v
+```
+
+The tests that run the models need TensorFlow (they are skipped without it).
 
 ## PW1 – Random Forest
 

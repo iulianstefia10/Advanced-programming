@@ -40,6 +40,8 @@ Thumbs.db
 # PW3: trained models, plots and the local CIFAR-100 dataset
 saved_models/
 *.keras
+# the PW2 MLP used by the /mnist/ page must stay in the repo (like MNIST_keras_CNN.h5)
+!app/mnist_mlp.keras
 static/cnn/
 app/data/
 
