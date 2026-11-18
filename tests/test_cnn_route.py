@@ -1,97 +1,146 @@
-"""Tests of the /cnn/ routes (PW3). The training itself is mocked.
-
-Run with:  python -m unittest discover -s tests
-"""
+# Tests for the CIFAR-100 CNN service (PW3): form checks, model, state of the training
+# No dataset is downloaded and no training is run here.
 
 import os
 import sys
 import unittest
-from unittest import mock
 
-APP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app")
-if APP_DIR not in sys.path:
-    sys.path.insert(0, APP_DIR)
+APP_DIR = os.path.join(os.path.dirname(__file__), "..", "app")
+sys.path.insert(0, APP_DIR)
 
-from app import app as flask_app
-from services import cnn_service
+from services import cnn_service  # noqa: E402
 
 
-class CnnRouteTest(unittest.TestCase):
+class ParseConfigTest(unittest.TestCase):
+    def test_empty_form_gives_the_defaults(self):
+        self.assertEqual(cnn_service.parse_config({}), cnn_service.DEFAULTS)
+
+    def test_text_values_are_converted(self):
+        config = cnn_service.parse_config({
+            "epochs": "3",
+            "batch_size": "128",
+            "optimizer": "sgd",
+            "learning_rate": "0.01",
+            "validation_split": "0.1",
+            "label_mode": "coarse",
+            "filters": "16",
+            "kernel_size": "4",
+            "dense_units": "512",
+        })
+        self.assertEqual(config["epochs"], 3)
+        self.assertEqual(config["batch_size"], 128)
+        self.assertEqual(config["optimizer"], "sgd")
+        self.assertAlmostEqual(config["learning_rate"], 0.01)
+        self.assertAlmostEqual(config["validation_split"], 0.1)
+        self.assertEqual(config["label_mode"], "coarse")
+        self.assertEqual(config["filters"], 16)
+        self.assertEqual(config["kernel_size"], 4)
+        self.assertEqual(config["dense_units"], 512)
+
+    def test_limits_are_accepted(self):
+        cnn_service.parse_config({"epochs": "1", "kernel_size": "2"})
+        cnn_service.parse_config({"epochs": "100", "kernel_size": "4"})
+
+    def test_wrong_values_are_refused(self):
+        wrong_forms = [
+            {"epochs": "0"},
+            {"epochs": "101"},
+            {"epochs": "abc"},
+            {"epochs": "2.5"},
+            {"batch_size": "7"},
+            {"batch_size": "2000"},
+            {"learning_rate": "0"},
+            {"learning_rate": "2"},
+            {"validation_split": "0.9"},
+            {"filters": "3"},
+            {"filters": "500"},
+            {"kernel_size": "5"},   # would shrink 32x32 images to nothing
+            {"dense_units": "4"},
+            {"dense_units": "5000"},
+            {"optimizer": "newton"},
+            {"label_mode": "medium"},
+        ]
+        for form in wrong_forms:
+            with self.subTest(form=form):
+                with self.assertRaises(ValueError):
+                    cnn_service.parse_config(form)
+
+    def test_error_message_names_the_field(self):
+        with self.assertRaises(ValueError) as context:
+            cnn_service.parse_config({"epochs": "0"})
+        self.assertIn("epochs", str(context.exception))
+
+
+class BuildModelTest(unittest.TestCase):
+    """Needs TensorFlow (the real one): the model is built but not trained."""
+
+    def test_default_model_is_the_one_of_the_assignment(self):
+        model = cnn_service.build_model(cnn_service.DEFAULTS)
+        self.assertEqual(model.count_params(), 270372)
+
+    def test_coarse_labels_change_only_the_output_layer(self):
+        config = {**cnn_service.DEFAULTS, "label_mode": "coarse"}
+        model = cnn_service.build_model(config)
+        # 128 * 20 + 20 instead of 128 * 100 + 100 for the last layer
+        self.assertEqual(model.count_params(), 270372 - 12900 + 2580)
+
+    def test_more_filters_means_more_parameters(self):
+        small = cnn_service.build_model({**cnn_service.DEFAULTS, "filters": 16})
+        large = cnn_service.build_model({**cnn_service.DEFAULTS, "filters": 64})
+        self.assertLess(small.count_params(), large.count_params())
+
+    def test_every_allowed_kernel_size_builds(self):
+        for kernel_size in (2, 3, 4):
+            with self.subTest(kernel_size=kernel_size):
+                config = {**cnn_service.DEFAULTS, "kernel_size": kernel_size}
+                cnn_service.build_model(config)
+
+
+class JobStateTest(unittest.TestCase):
     def setUp(self):
-        flask_app.config["TESTING"] = True
-        self.client = flask_app.test_client()
+        self._reset()
 
-    def test_page_is_displayed_with_the_form(self):
-        response = self.client.get("/cnn/")
-        self.assertEqual(response.status_code, 200)
-        html = response.get_data(as_text=True)
-        self.assertIn("CIFAR-100", html)
-        for field in ("epochs", "batch_size", "optimizer", "learning_rate",
-                      "validation_split", "label_mode", "filters",
-                      "kernel_size", "dense_units"):
-            with self.subTest(field=field):
-                self.assertIn(f'name="{field}"', html)
+    def tearDown(self):
+        self._reset()
 
-    def test_page_has_a_stop_button(self):
-        html = self.client.get("/cnn/").get_data(as_text=True)
-        self.assertIn('id="stop-button"', html)
+    @staticmethod
+    def _reset():
+        cnn_service._stop_event.clear()
+        with cnn_service._lock:
+            cnn_service._job.clear()
+            cnn_service._job["status"] = "idle"
 
-    def test_valid_form_starts_the_training(self):
-        with mock.patch.object(cnn_service, "start_training", return_value=True) as start:
-            response = self.client.post("/cnn/train", data={
-                "epochs": "2", "batch_size": "64", "optimizer": "adam",
-                "learning_rate": "0.001", "validation_split": "0.2",
-                "label_mode": "fine", "filters": "32", "kernel_size": "3",
-                "dense_units": "256",
-            })
-        self.assertEqual(response.status_code, 302)          # redirected to the page
-        self.assertTrue(response.headers["Location"].endswith("/cnn/"))
-        start.assert_called_once()
-        config = start.call_args[0][0]
-        self.assertEqual(config["epochs"], 2)
-        self.assertEqual(config["batch_size"], 64)
+    @staticmethod
+    def _set_status(status):
+        with cnn_service._lock:
+            cnn_service._job["status"] = status
 
-    def test_wrong_value_is_refused_and_nothing_starts(self):
-        with mock.patch.object(cnn_service, "start_training") as start:
-            response = self.client.post("/cnn/train", data={"epochs": "0"})
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("epochs", response.get_data(as_text=True))
-        start.assert_not_called()
+    def test_nothing_running_at_start(self):
+        self.assertFalse(cnn_service.is_running())
+        self.assertEqual(cnn_service.get_status()["status"], "idle")
 
-    def test_kernel_size_5_is_refused(self):
-        with mock.patch.object(cnn_service, "start_training") as start:
-            response = self.client.post("/cnn/train", data={"kernel_size": "5"})
-        self.assertEqual(response.status_code, 400)
-        start.assert_not_called()
+    def test_stop_is_refused_when_idle(self):
+        self.assertFalse(cnn_service.request_stop())
+        self.assertFalse(cnn_service._stop_event.is_set())
 
-    def test_training_already_running_gives_409(self):
-        with mock.patch.object(cnn_service, "start_training", return_value=False):
-            response = self.client.post("/cnn/train", data={"epochs": "2"})
-        self.assertEqual(response.status_code, 409)
-        self.assertIn("already running", response.get_data(as_text=True))
+    def test_stop_during_download_and_training(self):
+        for status in ("loading", "training"):
+            with self.subTest(status=status):
+                self._reset()
+                self._set_status(status)
+                self.assertTrue(cnn_service.request_stop())
+                self.assertEqual(cnn_service.get_status()["status"], "stopping")
+                self.assertTrue(cnn_service._stop_event.is_set())
 
-    def test_train_does_not_answer_to_get(self):
-        self.assertEqual(self.client.get("/cnn/train").status_code, 405)
+    def test_second_training_is_refused_while_one_runs(self):
+        self._set_status("training")
+        self.assertTrue(cnn_service.is_running())
+        self.assertFalse(cnn_service.start_training(cnn_service.DEFAULTS, "unused"))
 
-    def test_status_returns_json(self):
-        with mock.patch.object(cnn_service, "get_status", return_value={"status": "idle"}):
-            response = self.client.get("/cnn/status")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json(), {"status": "idle"})
-
-    def test_status_gives_the_url_of_the_plot_when_finished(self):
-        finished = {"status": "done", "plot_file": "cnn/history.png", "finished_at": 123.4}
-        with mock.patch.object(cnn_service, "get_status", return_value=finished):
-            data = self.client.get("/cnn/status").get_json()
-        self.assertIn("/static/cnn/history.png", data["plot_url"])
-
-    def test_stop_answers_with_the_result_of_the_request(self):
-        for accepted in (True, False):
-            with self.subTest(accepted=accepted):
-                with mock.patch.object(cnn_service, "request_stop", return_value=accepted):
-                    response = self.client.post("/cnn/stop")
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.get_json(), {"ok": accepted})
+    def test_status_is_a_copy(self):
+        status = cnn_service.get_status()
+        status["status"] = "hacked"
+        self.assertEqual(cnn_service.get_status()["status"], "idle")
 
 
 if __name__ == "__main__":
