@@ -1,5 +1,5 @@
 
-from flask import Blueprint, render_template, jsonify
+from flask import Blueprint, render_template, jsonify, request
 from sqlalchemy import func, inspect
 import matplotlib
 
@@ -10,6 +10,15 @@ import io
 import base64
 
 from extensions import db
+from services.chinook_clusters import (
+    K_MAX,
+    K_MIN,
+    cluster_customers,
+    elbow_curve,
+    elbow_plot,
+    get_customer_features,
+    scatter_plot,
+)
 from models.chinook import (
     Artist,
     Album,
@@ -270,6 +279,37 @@ def metadata():
     return render_template(
         "metadata.html",
         tables=tables,
+    )
+
+
+@chinook_bp.route("/clusters")
+def clusters():
+    error = None
+    k = request.args.get("k", default="3")
+
+    # check the value of k from the form
+    try:
+        k = int(k)
+        if not K_MIN <= k <= K_MAX:
+            raise ValueError
+    except ValueError:
+        error = f"k must be a whole number between {K_MIN} and {K_MAX}."
+        k = 3
+
+    customers = get_customer_features()
+    ks, inertias = elbow_curve(customers)
+    customers, summary = cluster_customers(customers, k)
+
+    return render_template(
+        "chinook_clusters.html",
+        k=k,
+        k_min=K_MIN,
+        k_max=K_MAX,
+        error=error,
+        customers=sorted(customers, key=lambda c: (c["cluster"], -c["total_spent"])),
+        summary=summary,
+        elbow_plot=elbow_plot(ks, inertias, k),
+        scatter_plot=scatter_plot(customers),
     )
 
 

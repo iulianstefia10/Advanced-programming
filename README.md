@@ -9,6 +9,7 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Explore relationships between artists and albums.
 - View statistics about tracks, genres, sales, and customers.
 - Inspect database tables and columns.
+- Group the customers into clusters with K-Means (`/chinook/clusters`).
 
 ### InfluxDB
 - Check the InfluxDB connection status.
@@ -16,6 +17,10 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Retrieve weather time-series data for Annecy.
 - Visualise weather measurements.
 - Format time-series data into input windows and prediction targets.
+
+### Digit recognition (Session 3)
+- Draw a digit on the page or upload an image.
+- Compare the prediction of the given CNN and of our PW2 MLP, with the probabilities.
 
 ### Object detection (YOLO)
 - Upload a photo and find the objects with a small ready YOLO model (80 COCO classes).
@@ -114,6 +119,70 @@ The formulas were checked against the NOAA heat index table and the Environment 
 ```bash
 python -m unittest tests.test_apparent_service tests.test_apparent_route -v
 ```
+
+## Chinook – Customer clusters (K-Means)
+
+Page: `http://localhost:5004/chinook/clusters`
+
+For every customer we compute, with SQLAlchemy queries:
+- the total spent (sum of the invoices),
+- the number of invoices,
+- the number of different genres bought,
+- the favourite genre and its share of the tracks bought (%).
+
+The four numbers are scaled with `StandardScaler` (they have different units) and grouped with K-Means.
+`k` is chosen in the form (2 to 10). The page shows the elbow curve, a scatter plot coloured by cluster and the table of the clusters and of the customers.
+
+Files:
+- `app/services/chinook_clusters.py` – queries, K-Means, elbow curve and plots
+- `app/routes/chinook.py` – the `/chinook/clusters` route
+- `app/templates/chinook_clusters.html` – the page
+
+### What we noticed
+
+- The elbow is around **k = 4**: the inertia goes 236 → 162 → 101 → 64, then decreases slowly.
+- With k = 4: a group of 8 big spenders who buy many genres (45.6 $, 9.5 genres), a group of 23 customers who mostly buy their favourite genre (51 % of their tracks), and a group of 27 "average" customers.
+- Chinook is a demo database: 58 of the 59 customers have exactly 7 invoices. So the number of invoices hardly separates the customers. The only customer with 6 invoices always gets a cluster of its own after scaling.
+- Rock is the favourite genre of 47 customers, so the favourite genre is more useful as a share (%) than as a name.
+- `random_state = 42` and `n_init = 10` make the result the same at every run.
+
+### Tests
+
+```bash
+python -m unittest tests.test_chinook_clusters -v
+```
+
+## Session 3 – Digit recognition: draw a digit, CNN and MLP
+
+Page: `http://localhost:5004/mnist/`
+
+You can draw a digit with the mouse (or a finger on a phone) or upload an image.
+The same prepared image is sent to two models and both predictions are shown with the probability of each digit:
+- **CNN**: `MNIST_keras_CNN.h5`, the model given in the subject,
+- **MLP**: our PW2 network (128-64-32, pixels divided by 255), trained once with `app/train_mnist_mlp.py` and saved in `app/mnist_mlp.keras` (test accuracy 0.974).
+
+Files:
+- `app/services/mnist_inference.py` – preparing the image and running the two models
+- `app/routes/mnist.py` – the `/mnist/` route (drawing or upload)
+- `app/templates/mnist_dashboard.html` – the canvas and the results
+- `app/train_mnist_mlp.py` – trains and saves the MLP (run it again only if the model must change)
+
+### What we paid attention to
+
+- The two models do not take the same input: the CNN wants an image `(1, 28, 28, 1)`, the MLP wants a vector of **784** values. Both must be divided by **255**, like during the training.
+- MNIST digits are **white on a black background**, but a drawing is black on white, so the image is inverted. A transparent background (canvas, PNG) is first made white.
+- In MNIST the digit is about 20×20 pixels and centred in 28×28. Before, the whole picture was just resized, so a digit drawn in a corner or very big was badly recognised (a 7 was predicted as 1). Now the digit is cropped, fitted in a 20×20 box and moved so that its centre of mass is in the middle. The page shows this 28×28 image ("what the models see").
+- With this preparation, on 200 MNIST test images turned into big black-on-white drawings, the CNN is right 199 times and the MLP 195 times. The CNN is a bit better on unusual shapes (for example a 6 written with a font).
+- An uploaded file is saved in `static/uploads` only if it really is an image.
+- `*.keras` files are ignored by git (PW3 models), so `app/mnist_mlp.keras` is added as an exception in `.gitignore`.
+
+### Tests
+
+```bash
+python -m unittest tests.test_mnist_inference -v
+```
+
+The tests that run the models need TensorFlow (they are skipped without it).
 
 ## PW1 – Random Forest
 
@@ -429,6 +498,20 @@ python -m unittest tests.test_yolo -v
 ```
 
 The tests that run the model need OpenCV (they are skipped without it).
+
+## Continuous integration (Session 7)
+
+File: `.github/workflows/ci.yml` (GitHub Actions).
+
+On every push and every pull request, GitHub runs two jobs:
+1. **Unit tests** – installs Python 3.12 (the same version as the Dockerfile) and `requirements.txt`, then runs `python -m unittest discover -s tests -v`.
+2. **Docker image** – builds the image exactly like `docker compose` (`docker build -f app/Dockerfile .`), starts it and checks that the home page answers.
+
+A pull request should only be merged when both jobs have a green check mark on GitHub (tab **Actions**, or at the bottom of the pull request).
+
+Notes:
+- The tests use the real `chinook.db` file and the saved models, so no database server is needed in CI. InfluxDB is not reachable from GitHub, so the InfluxDB pages are not tested against the real server.
+- The image is about 4.3 GB because of TensorFlow, so the Docker job takes a few minutes.
 
 ## Security
 - Do not commit `.env` files or API tokens.
