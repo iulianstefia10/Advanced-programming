@@ -18,6 +18,16 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Visualise weather measurements.
 - Format time-series data into input windows and prediction targets.
 
+### Time-series forecasting
+- Forecast the temperature of Annecy from several variables (temperature, humidity, wind…) of several nearby stations (`/forecast/`).
+- Compare five models: naive and seasonal baselines, linear regression, MLP and LSTM, with MAE and RMSE on unseen data.
+- See how much the other variables and cities help, and the forecast of every model on a chart.
+- The same page works on the `crypto` and `forex` buckets.
+
+### Apparent temperature (Session 1)
+- Compute the felt temperature from temperature, humidity and wind (heat index, wind chill, Steadman).
+- Load the current weather of a station from InfluxDB.
+
 ### Digit recognition (Session 3)
 - Draw a digit on the page or upload an image.
 - Compare the prediction of the given CNN and of our PW2 MLP, with the probabilities.
@@ -36,29 +46,61 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Change the hyperparameters from the web page (fine or coarse labels, filters, kernel size, optimizer...).
 - Follow the download and the training live, and stop them with a button.
 
+### Neural network on MNIST (PW2)
+- Train a fully connected network (MLP) on MNIST and change its architecture and training hyperparameters.
+- Run a sensitivity study of the accuracy.
+
+### PyTorch on CPU, GPU and TPU (PW4)
+- Google Colab notebook comparing the training and inference times of the same network on CPU, GPU and TPU.
+
 ## Technologies
-- Python
-- Flask
-- scikit-learn
-- Flask-SQLAlchemy
-- SQLite
-- InfluxDB 2.x
-- HTML, CSS, and JavaScript
+- Python 3.12, Flask, Jinja2
+- Flask-SQLAlchemy and SQLite (Chinook database)
+- InfluxDB 2.x and the Flux language (time series)
+- scikit-learn (random forest, K-Means, linear regression)
+- TensorFlow / Keras (MLP, CNN, LSTM)
+- OpenCV and ONNX (YOLO object detection)
+- NumPy and pandas
+- PyTorch in Google Colab (PW4)
+- HTML, CSS (Bootstrap) and JavaScript (charts drawn in SVG)
 - Docker and Docker Compose
+- GitHub Actions (continuous integration)
 
 ## Project Structure
 
 ```text
 Advanced-Programming/
+├── .github/workflows/ci.yml      # tests + Docker build on every push (Session 7)
 ├── app/
-│   ├── app.py
+│   ├── app.py                    # creates the Flask app, registers every page
+│   ├── extensions.py             # SQLAlchemy object
 │   ├── Dockerfile
 │   ├── docker-compose.yml
-│   ├── routes/
-│   ├── templates/
-│   └── static/
-│       └── css/
-├── .env
+│   ├── database/chinook.db       # SQLite database (Sessions 2-3, Ex 1)
+│   ├── models/                   # SQLAlchemy models (Chinook, inference models)
+│   ├── routes/                   # one blueprint per page
+│   │   ├── chinook.py            # /chinook/...          Sessions 2-3, Ex 1 + clusters
+│   │   ├── influxdb.py           # /influxdb/...         Sessions 2-3, Ex 2
+│   │   ├── forecast.py           # /forecast/            time-series forecasting
+│   │   ├── apparent.py           # /apparent/            Session 1, 5.4
+│   │   ├── mnist.py              # /mnist/               Sessions 2-3, Ex 3
+│   │   ├── random_forest.py      # /rf/                  PW1
+│   │   ├── mlp.py                # /mlp/                 PW2
+│   │   ├── cnn.py                # /cnn/                 PW3
+│   │   └── yolo.py               # /yolo/                object detection
+│   ├── services/                 # the models and the computations of each page
+│   ├── utils/dataset.py          # windows for time series (format_dataset, make_windows)
+│   ├── templates/                # one page per feature + base.html and home.html
+│   ├── static/                   # CSS, uploaded images (not committed)
+│   ├── MNIST_keras_CNN.h5        # given CNN (Ex 3)
+│   ├── mnist_mlp.keras           # our PW2 MLP, saved by train_mnist_mlp.py
+│   ├── yolov8n.onnx              # YOLO model
+│   ├── pw2_sensitivity.py        # PW2 results for this README
+│   └── forecast_report.py        # forecasting results for this README
+├── notebooks/                    # Google Colab notebooks (PW4, PW5)
+├── tests/                        # unit tests: python -m unittest discover -s tests -v
+├── requirements.txt
+├── .env.example                  # copy to .env and fill the InfluxDB token
 └── README.md
 ```
 
@@ -152,6 +194,59 @@ Files:
 ```bash
 python -m unittest tests.test_chinook_clusters -v
 ```
+
+## Time-series forecasting (InfluxDB weather, several variables and cities)
+
+Page: `http://localhost:5004/forecast/`
+
+Sessions 2–3 (Exercise 2, §7.4) prepared the data: read a weather series from InfluxDB and cut it into windows of x points to predict the x next points. As asked by the teacher, we use these windows to **forecast the temperature of Annecy from several variables and several cities around Annecy**, and we compare five models.
+
+Files:
+- `app/services/forecast.py` – reading InfluxDB, hourly table, windows, split, the five models, the errors
+- `app/routes/forecast.py` – the `/forecast` route
+- `app/templates/forecast_dashboard.html` – the page and its two charts
+- `app/utils/dataset.py` – `make_windows`, the version of `format_dataset` with several variables
+- `app/forecast_report.py` – prints the results below from the real InfluxDB data
+
+### How it works
+
+1. **What exists in the bucket** is read with the Flux `schema` functions: measurements, stations (tag `location`), variables (fields). The form only accepts these values, so nothing typed by the user goes into the Flux query.
+2. **One value per hour** for every chosen variable of every chosen station (`aggregateWindow(every: 1h)`), put in one table with pandas; holes of up to 3 hours are interpolated, series with too many missing hours are left out.
+3. **Windows**: the last x hours of all the series are the input, the next hours of the target are the output (`make_windows`; with one variable it gives the same windows as `format_dataset`).
+4. **Split by time, never shuffled**: the first 80 % of the windows to train, the last 20 % to test, with a gap between them so that no hour is used both for training and for testing. The scaling (mean and standard deviation) is computed on the training hours only.
+5. **Five models**:
+
+| Model | Idea |
+|---|---|
+| Naive | the next hours equal the last known value |
+| Seasonal naive | the next hours equal the same hours of the previous day (temperature has a 24 h cycle) |
+| Linear regression | ridge regression on all the values of the window |
+| MLP | dense network 64 → 32 → horizon (TensorFlow) |
+| LSTM | recurrent network with 32 units that reads the window hour by hour (TensorFlow) |
+
+The MLP and the LSTM stop when the error on the most recent 10 % of the training windows stops improving (early stopping, patience 5).
+
+6. **Errors** on the test period, in °C: MAE (mean absolute error), RMSE, and the MAE for every forecast hour (+1 h … +x h). Every learned model is trained twice, **with all the inputs** and **with the Annecy temperature only**; the column "gain" shows how much the other variables and cities help.
+
+### What we paid attention to
+
+- **No shuffling and a gap between train and test.** With overlapping windows, a random split puts almost the same hours in train and test and gives errors that are far too good.
+- **Scaling on the training part only**, for the same reason.
+- **Baselines first.** Temperature has a strong daily cycle; a model is only useful if it beats "same hour yesterday".
+- The teacher's query reads **one week** (`range(start: -1w)`); that is about 170 hours, too few windows for an LSTM. The page reads 30 days by default (up to 365).
+- `crypto` and `forex` have other tags and fields: the page reads them from the bucket, so the same code works on them.
+
+### Results
+
+<!-- Paste here the output of: docker exec group4 python forecast_report.py -->
+
+### Tests
+
+```bash
+python -m unittest tests.test_forecast_service tests.test_forecast_route -v
+```
+
+The tests use a fake InfluxDB (two stations, one of them sees the weather 6 hours earlier) so they run without the server, also on GitHub. They check the windows, that train and test never share an hour, the Flux query, the form checks, that the linear model beats the naive baseline and that the other city helps. The MLP and LSTM test is skipped when TensorFlow is not installed.
 
 ## Session 3 – Digit recognition: draw a digit, CNN and MLP
 
@@ -521,4 +616,4 @@ Notes:
 
 ## Academic Context
 
-This project demonstrates Flask web development, database integration, InfluxDB time-series queries, data visualisation, and dataset formatting.
+This project demonstrates Flask web development, database integration, InfluxDB time-series queries and forecasting, machine learning and deep learning models (classical ML, MLP, CNN, LSTM, object detection), data visualisation and continuous integration.

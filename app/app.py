@@ -77,6 +77,7 @@ def create_app():
     from routes.mlp import mlp_bp
     from routes.apparent import apparent_bp
     from routes.yolo import yolo_bp
+    from routes.forecast import forecast_bp
     
     app.register_blueprint(cnn_bp)
     app.register_blueprint(chinook_bp)
@@ -86,6 +87,7 @@ def create_app():
     app.register_blueprint(mlp_bp)
     app.register_blueprint(apparent_bp)
     app.register_blueprint(yolo_bp)
+    app.register_blueprint(forecast_bp)
 
     return app
 
