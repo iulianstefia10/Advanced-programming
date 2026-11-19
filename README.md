@@ -65,6 +65,7 @@ Advanced-Programming/
 ## Running the Application
 
 Configure the required environment variables in `.env`, including the InfluxDB connection settings and API token.
+Copy `.env.example` to `.env` and fill in `INFLUXDB_V2_TOKEN`. If the InfluxDB server gets a new address (for example after a school network change), only `INFLUXDB_V2_URL` in `.env` has to be changed. When the server can't be reached, the InfluxDB pages show a short "InfluxDB is unavailable" message instead of an error page.
 
 From the project root, build and start the application:
 

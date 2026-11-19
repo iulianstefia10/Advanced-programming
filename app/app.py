@@ -44,8 +44,9 @@ def create_app():
             for column in table.columns:
                 print(f"  Column: {column.name}, Type: {column.type}")
 
-    app.config["INFLUXDB_V2_URL"] = (
-        "http://192.168.168.88:8086"
+    # the address can be changed in .env (the school network can change)
+    app.config["INFLUXDB_V2_URL"] = os.environ.get(
+        "INFLUXDB_V2_URL", "http://192.168.168.88:8086"
     )
 
     app.config["INFLUXDB_V2_ORG"] = "iut"
