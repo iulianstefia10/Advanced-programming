@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}
+YOLO · Object Detection
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-bounding-box"></i>
+        OBJECT DETECTION &middot; YOLOv8n
+    </div>
+
+    <h1>
+        Object <span>Detection.</span>
+    </h1>
+
+    <p>
+        Upload a photo: a small ready YOLO model (YOLOv8n, trained on the 80 COCO classes)
+        finds the objects and draws a box with the name and the confidence.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    {% if error %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="database-card" style="border-color: #ff304f;">
+                <h3><i class="bi bi-exclamation-triangle me-2"></i>Error</h3>
+                <p class="mb-0">{{ error }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="row g-4">
+
+        <!-- Card 1: upload -->
+        <div class="col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                </div>
+
+                <h3>Upload a photo</h3>
+
+                <form action="{{ url_for('yolo.dashboard') }}" method="POST" enctype="multipart/form-data">
+
+                    <div class="mb-3">
+                        <input type="file" name="file" accept="image/*"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="confidence" class="form-label">Confidence threshold (%)</label>
+                        <input type="number" name="confidence" id="confidence"
+                               min="1" max="99" step="1" value="{{ confidence }}"
+                               class="form-control bg-dark text-white border-secondary" required>
+                    </div>
+
+                    <button type="submit" class="btn-modern w-100 border-0" style="cursor: pointer;">
+                        Detect objects
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+
+                </form>
+
+                <p class="mt-3 mb-0 small">
+                    The photo is not saved on the server. Objects below the threshold are not shown.
+                </p>
+
+            </div>
+        </div>
+
+
+        <!-- Card 2: result -->
+        <div class="col-lg-8">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-image"></i>
+                </div>
+
+                <h3>Result</h3>
+
+                {% if result_image %}
+                <img src="data:image/jpeg;base64,{{ result_image }}" alt="Detected objects"
+                     class="img-fluid rounded mb-3" id="yoloResult">
+
+                {% if detections %}
+                <p>{{ detections|length }} object(s) found:</p>
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Object</th>
+                                <th>Confidence</th>
+                                <th>Box (x1, y1, x2, y2)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in detections %}
+                            <tr class="detection-row">
+                                <td>{{ d.label }}</td>
+                                <td>{{ d.confidence }}%</td>
+                                <td>{{ d.box|join(", ") }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="mb-0">No object found above {{ confidence }}% confidence.</p>
+                {% endif %}
+
+                {% else %}
+                <p>Choose a photo to see the detected objects here.</p>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}

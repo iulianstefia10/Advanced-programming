@@ -22,6 +22,10 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - Draw a digit on the page or upload an image.
 - Compare the prediction of the given CNN and of our PW2 MLP, with the probabilities.
 
+### Object detection (YOLO)
+- Upload a photo and find the objects with a small ready YOLO model (80 COCO classes).
+- See the boxes, the labels and the confidence.
+
 ### Random Forest (PW1)
 - Train a random forest on the iris, digits or diabetes dataset.
 - Change the hyperparameters from the web page.
@@ -460,6 +464,40 @@ To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), th
 - The reason is the batch size of 4 and the very small model: each step sends only 4 images to the accelerator and does very little computation, so most of the time is spent on transfers and loading the data, not on computing. With bigger batches and a bigger model, the GPU and TPU would be much faster.
 - Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.
 - Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.
+
+## Object detection with YOLO
+
+Page: `http://localhost:5004/yolo/`
+
+You upload a photo and a small ready model, **YOLOv8n** (trained on the 80 classes of the COCO dataset: person, car, bus, dog, cup...), draws a box around every object with its name and its confidence. The confidence threshold can be changed in the form. The photo is not saved on the server.
+
+Files:
+- `app/yolov8n.onnx` – the model (12.9 MB)
+- `app/services/yolo.py` – preparing the photo, running the model, reading the result, drawing the boxes
+- `app/routes/yolo.py` – the `/yolo/` route
+- `app/templates/yolo_dashboard.html` – the page
+
+### Why ONNX and OpenCV instead of the `ultralytics` package
+
+The easiest way to use YOLO is the `ultralytics` package, but it installs **PyTorch**, which would make our Docker image (already about 4.3 GB because of TensorFlow) much bigger. So we exported the model once to the **ONNX** format (in a separate container, with `yolo export model=yolov8n.pt format=onnx`) and we read it with **OpenCV** (`cv2.dnn`), which is already in the requirements. The site does not need PyTorch at all.
+
+What we had to do ourselves, because `ultralytics` normally does it:
+- **Letterbox**: the model wants a 640×640 image, so the photo is resized without changing its proportions and grey bands are added.
+- **Reading the output**: the model returns a table of 84 × 8400 (4 numbers for the box + 80 class scores, for 8400 positions). We keep the positions above the threshold and convert the boxes back to the size of the original photo.
+- **NMS** (non-maximum suppression, `cv2.dnn.NMSBoxes`): the model finds the same object several times, NMS keeps only the best box.
+- Photos from a phone can be rotated (EXIF), so they are turned the right way first.
+
+Problem we met: `opencv-python` does not import in the `python:3.12-slim` image (`libxcb.so.1: cannot open shared object file`), because it needs graphical libraries. We use **`opencv-python-headless`** (same version), which is made for servers.
+
+Result on the standard test photo of Ultralytics (`bus.jpg`): 1 bus and 4 persons found (83–90 %), in less than a second on the CPU.
+
+### Tests
+
+```bash
+python -m unittest tests.test_yolo -v
+```
+
+The tests that run the model need OpenCV (they are skipped without it).
 
 ## Continuous integration (Session 7)
 
