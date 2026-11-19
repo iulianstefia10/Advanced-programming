@@ -1,4 +1,6 @@
 from flask import Blueprint, current_app, render_template, request
+from influxdb_client.rest import ApiException
+from urllib3.exceptions import HTTPError
 
 influx_bp = Blueprint(
     "influxdb",
@@ -9,6 +11,18 @@ influx_bp = Blueprint(
 
 def get_influxdb():
     return current_app.extensions["influxdb"]
+
+
+# when the InfluxDB server can't be reached, show a short message instead of the error page
+@influx_bp.errorhandler(HTTPError)
+@influx_bp.errorhandler(ApiException)
+def influxdb_unavailable(error):
+    return render_template(
+        "influx_status.html",
+        connected=False,
+        error=str(error),
+        url=current_app.config["INFLUXDB_V2_URL"]
+    ), 503
 
 
 @influx_bp.route("/")
@@ -23,7 +37,8 @@ def ping():
 
     return render_template(
         "influx_status.html",
-        connected=connected
+        connected=connected,
+        url=current_app.config["INFLUXDB_V2_URL"]
     )
 
 

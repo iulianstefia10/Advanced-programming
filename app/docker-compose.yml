@@ -9,6 +9,7 @@ services:
     environment:
       - FLASK_APP=app.py
       - FLASK_ENV=development
+      - INFLUXDB_V2_URL=${INFLUXDB_V2_URL:-http://192.168.168.88:8086}
       - INFLUXDB_V2_ORG=${INFLUXDB_V2_ORG}
       - INFLUXDB_V2_TOKEN=${INFLUXDB_V2_TOKEN}
     volumes:

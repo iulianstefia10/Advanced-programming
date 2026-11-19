@@ -63,6 +63,18 @@ Connection · InfluxDB
                 a connection to the InfluxDB server.
             </p>
 
+            {% if url %}
+                <p>
+                    Address: <code>{{ url }}</code><br>
+                    Check that the server is reachable from this network,
+                    or change <code>INFLUXDB_V2_URL</code> in <code>.env</code>.
+                </p>
+            {% endif %}
+
+            {% if error %}
+                <p class="small text-muted">{{ error }}</p>
+            {% endif %}
+
         {% endif %}
 
     </div>
