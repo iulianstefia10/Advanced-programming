@@ -17,7 +17,7 @@ URL = os.environ.get("INFLUXDB_V2_URL", "http://192.168.168.88:8086")
 ORG = os.environ.get("INFLUXDB_V2_ORG", "iut")
 
 
-def report(query_api, bucket, title, days=30, window=24, horizon=24):
+def report(query_api, bucket, title, days=60, window=24, horizon=24):
     print(f"\n## {title}\n")
     try:
         options = forecast.discover(query_api, ORG, bucket)
@@ -36,6 +36,7 @@ def report(query_api, bucket, title, days=30, window=24, horizon=24):
     print(f"Target `{result['target']}`, {result['rows']} hours ({result['start']} to {result['end']} UTC), "
           f"{window} h -> {horizon} h, {len(result['columns'])} input series: "
           + ", ".join(f"`{c}`" for c in result["columns"]) + ".\n")
+    print(f"{result['n_train']} training windows, {result['n_test']} test windows.\n")
     print("| Model | MAE | RMSE | MAE, target only | Gain of the extra inputs | Time (s) |")
     print("|---|---|---|---|---|---|")
     for row in result["table"]:

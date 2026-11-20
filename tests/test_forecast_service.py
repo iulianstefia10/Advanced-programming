@@ -170,6 +170,55 @@ class ForecastTests(unittest.TestCase):
         self.assertNotIn("seasonal", [row["key"] for row in result["table"]])
 
 
+class RobustnessTests(unittest.TestCase):
+    """The first real run (20.11) showed that many inputs made the models worse
+    than the naive forecast. These tests keep the fixes in place."""
+
+    @staticmethod
+    def noisy_frame(seed):
+        import pandas as pd
+
+        rng = np.random.default_rng(seed)
+        n = 669
+        t = pd.date_range("2026-10-21", periods=n, freq="h", tz="UTC")
+        base = 6 + 4 * np.sin(2 * np.pi * np.arange(n + 6) / 24) + np.cumsum(rng.normal(0, 0.35, n + 6))
+        cols = {"temperature_2m @ annecy": base[:n],
+                "temperature_2m @ geneve": base[3:n + 3] + rng.normal(0, 0.3, n)}
+        for i in range(30):  # useless series that drift
+            cols[f"noise_{i}"] = np.cumsum(rng.normal(0, 1, n))
+        return pd.DataFrame(cols, index=t)
+
+    def test_many_useless_inputs_do_not_break_the_linear_model(self):
+        params = dict(forecast.DEFAULT_PARAMS, window=24, horizon=24)
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                result = forecast.run_forecast(self.noisy_frame(seed), params, models=FAST)
+                mae = {row["key"]: row for row in result["table"]}
+                self.assertLess(mae["linear"]["mae"], mae["naive"]["mae"])
+                # 30 drifting random series is a worst case: a small loss is acceptable,
+                # before the fixes the error was 2 to 3 times bigger
+                self.assertLess(mae["linear"]["mae"], 1.25 * mae["linear"]["mae_target_only"])
+
+    def test_alpha_is_chosen_by_time(self):
+        rng = np.random.default_rng(0)
+        X = rng.normal(size=(200, 50))
+        y = X[:, :1] * 0.5 + rng.normal(0, 1, (200, 3))
+        self.assertIn(forecast.choose_alpha(X, y, gap=10), list(forecast.ALPHAS))
+
+    def test_model_inputs(self):
+        X = np.random.default_rng(0).normal(size=(5, 24, 4))
+        flat = forecast.model_inputs("linear", X, [0, 1, 2, 3])
+        self.assertEqual(flat.shape, (5, 23 + 1 + 3 * 5))  # target window + level + 6 h of 3 others
+        seq = forecast.model_inputs("lstm", X, [0, 1, 2, 3])
+        self.assertEqual(seq.shape, (5, 24, 5))
+        self.assertTrue(np.allclose(seq[:, -1, :4], 0))  # relative to the last value
+
+    def test_defaults_keep_nearby_stations_only(self):
+        opts = dict(options(), tag_values=["annecy", "bordeaux", "geneve", "paris", "rumilly"])
+        params = forecast.default_params(opts)
+        self.assertEqual(params["extra_series"], ["geneve", "rumilly"])
+
+
 @unittest.skipUnless(HAS_TF, "TensorFlow is not installed")
 class NeuralNetworkTests(unittest.TestCase):
 

@@ -219,7 +219,7 @@ Files:
 
 1. **What exists in the bucket** is read with the Flux `schema` functions: measurements, stations (tag `location`), variables (fields). The form only accepts these values, so nothing typed by the user goes into the Flux query.
 2. **One value per hour** for every chosen variable of every chosen station (`aggregateWindow(every: 1h)`), put in one table with pandas; holes of up to 3 hours are interpolated, series with too many missing hours are left out.
-3. **Windows**: the last x hours of all the series are the input, the next hours of the target are the output (`make_windows`; with one variable it gives the same windows as `format_dataset`).
+3. **Windows**: the last x hours of all the series are the input, the next hours of the target are the output (`make_windows`; with one variable it gives the same windows as `format_dataset`). Each series is given **relative to its last value** in the window, and the models predict the **change** from the last known temperature.
 4. **Split by time, never shuffled**: the first 80 % of the windows to train, the last 20 % to test, with a gap between them so that no hour is used both for training and for testing. The scaling (mean and standard deviation) is computed on the training hours only.
 5. **Five models**:
 
@@ -227,9 +227,9 @@ Files:
 |---|---|
 | Naive | the next hours equal the last known value |
 | Seasonal naive | the next hours equal the same hours of the previous day (temperature has a 24 h cycle) |
-| Linear regression | ridge regression on all the values of the window |
-| MLP | dense network 64 → 32 → horizon (TensorFlow) |
-| LSTM | recurrent network with 32 units that reads the window hour by hour (TensorFlow) |
+| Linear regression | ridge regression on the target window and the last 6 hours of the other series; the strength of the regularisation is chosen by time |
+| MLP | dense network 64 → 32 → horizon with dropout and L2 (TensorFlow), same inputs as the linear model |
+| LSTM | recurrent network with 32 units and dropout that reads the whole window of every series hour by hour (TensorFlow) |
 
 The MLP and the LSTM stop when the error on the most recent 10 % of the training windows stops improving (early stopping, patience 5).
 
@@ -240,12 +240,68 @@ The MLP and the LSTM stop when the error on the most recent 10 % of the training
 - **No shuffling and a gap between train and test.** With overlapping windows, a random split puts almost the same hours in train and test and gives errors that are far too good.
 - **Scaling on the training part only**, for the same reason.
 - **Baselines first.** Temperature has a strong daily cycle; a model is only useful if it beats "same hour yesterday".
-- The teacher's query reads **one week** (`range(start: -1w)`); that is about 170 hours, too few windows for an LSTM. The page reads 30 days by default (up to 365).
+- The teacher's query reads **one week** (`range(start: -1w)`); that is about 170 hours, too few windows for an LSTM. The page reads 60 days by default (up to 365).
+- **More inputs is not always better** (see the first run below): with few training windows, many inputs make the models overfit. Only the stations close to Annecy are ticked by default.
 - `crypto` and `forex` have other tags and fields: the page reads them from the bucket, so the same code works on them.
 
 ### Results
 
-<!-- Paste here the output of: docker exec group4 python forecast_report.py -->
+#### First run (20.11, before the fixes): more inputs made it worse
+
+30 days of data (668 hours, 451 training windows, 124 test windows), Annecy temperature, 24 h → next 24 h, with **35 input series** (temperature, humidity, cloud cover, pressure and wind of 7 stations, Bordeaux included). MAE and RMSE in °C.
+
+| Model | MAE | RMSE | MAE, Annecy temperature only | Gain of the extra inputs |
+|---|---|---|---|---|
+| **Naive (last value)** | **2.14** | 2.71 | – | – |
+| Seasonal naive (previous day) | 2.58 | 3.12 | – | – |
+| Linear regression | 5.31 | 6.64 | 1.89 | −180 % |
+| MLP | 6.68 | 8.91 | 2.61 | −156 % |
+| LSTM | 3.25 | 3.92 | 2.56 | −27 % |
+
+What it showed:
+- With the **Annecy temperature only**, the linear regression (1.89 °C) already beats the naive forecast (2.14 °C).
+- With all the inputs every learned model became **worse than the naive forecast**. 35 series × 24 hours = 840 numbers per window for only 451 training windows: the models learned the noise of the training period (**overfitting**). Far stations (Bordeaux is 600 km away) bring no information about the next hours in Annecy.
+- The temperature drifts (colder in November than in October), so values given as absolute levels look different in the test period than in training.
+- Crypto (`change_pct_24h` of ADAUSDT, 1 series): the linear regression was the best (MAE 2.56 vs 3.49 for the naive forecast). Forex (`rate` of USD): the naive forecast was the best (0.019); an exchange rate barely moves in 24 hours.
+
+What we changed:
+1. The models predict the **change** from the last known value, and every input series is given **relative to its last value**: a model that learns nothing gives the naive forecast instead of nonsense, and the drift of the level no longer matters.
+2. **Fewer inputs** for the linear model and the MLP: the whole window of the target, but only the last 6 hours of the other series.
+3. The **strength of the regularisation** of the ridge regression is chosen **by time** (train on the first 80 % of the training windows, validate on the last 20 %). The usual leave-one-out (`RidgeCV`) almost sees the answer with overlapping windows and chose a far too weak regularisation. Dropout and L2 for the MLP and the LSTM.
+4. By default only the **stations close to Annecy** (Aix-les-Bains, Annemasse, Chambéry, Geneva, Rumilly) and three variables (humidity, pressure, wind) are ticked; 60 days of data instead of 30.
+
+On a test with 30 useless drifting series added, the error of the linear model with all the inputs went from 2–3 times the error without them to about the same; the tests keep this (`RobustnessTests`).
+
+#### After the fixes (20.11)
+
+60 days of data (1,387 hours, 21.09 → 20.11.2026), Annecy and the 5 stations close to it, 4 variables (temperature, humidity, pressure, wind) = **24 input series**. MAE and RMSE in °C on the last 20 % (never seen in training). Output of `python forecast_report.py`.
+
+| Model | 24 h → 24 h: MAE | RMSE | MAE, Annecy only | Gain | 24 h → 6 h: MAE | RMSE | MAE, Annecy only | Gain |
+|---|---|---|---|---|---|---|---|---|
+| Naive (last value) | 2.58 | 3.32 | – | – | 1.51 | 2.14 | – | – |
+| Seasonal naive (previous day) | 2.55 | 3.16 | – | – | 2.59 | 3.19 | – | – |
+| Linear regression | **2.09** | 2.65 | 2.18 | +4.1 % | 1.27 | 1.68 | 1.24 | −2.6 % |
+| MLP | **2.09** | **2.63** | 2.09 | +0.2 % | **1.18** | **1.55** | 1.14 | −3.1 % |
+| LSTM | 2.17 | 2.77 | 2.26 | +3.7 % | 1.28 | 1.75 | 1.29 | +1.3 % |
+
+Other buckets (one series each, 24 h → 24 h):
+
+| Model | Crypto: `price` of BTCUSDT (MAE, $) | Forex: `rate` of USD (MAE) |
+|---|---|---|
+| Naive (last value) | **832** | **0.025** |
+| Seasonal naive | 1,270 | 0.047 |
+| Linear regression | 1,056 | 0.026 |
+| MLP | 853 | 0.109 |
+| LSTM | 921 | 0.056 |
+
+What we noticed:
+- **The fixes changed everything.** Before them the learned models were worse than the naive forecast; now all three beat both baselines: for the next 24 h, 2.09 °C instead of 2.55 °C (−19 %); for the next 6 h, the MLP makes 1.18 °C instead of 1.51 °C (−22 %).
+- **Other cities and variables help a little for the next day** (+4 % for the linear model and the LSTM) and not for the next 6 hours (−3 %): in the short term the recent temperature of Annecy itself carries almost all the information. The big gain comes from the way the data is given to the models, not from adding stations; without the fixes, adding them made the error 2–3 times bigger.
+- **More data helped**: 60 days give 1,025 training windows instead of 451.
+- The error grows with the forecast hour (chart "Error by forecast hour" on the page): +1 h is easy, +24 h is hard.
+- **Crypto**: for the price of Bitcoin the naive forecast is the best (832 $), the MLP is close (853 $). Past prices hardly predict the next changes of a crypto price, which behaves almost like a random walk; it is the expected result, not a bug.
+- **Forex**: the naive forecast is the best (0.025), the linear model is the same (0.026): an exchange rate barely moves in 24 hours.
+- All the 182 tests of the project pass with these changes (`python -m unittest discover -s tests`).
 
 ### Tests
 

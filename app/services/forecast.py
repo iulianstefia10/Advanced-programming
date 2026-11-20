@@ -24,18 +24,29 @@ from utils.dataset import make_windows
 SEED = 42
 BUCKETS = ["weather", "crypto", "forex"]
 
-# Preferred choices when they exist in the bucket (otherwise the first one found)
+# Preferred choices when they exist in the bucket (otherwise the first one found).
+# A list means "the first of these that exists".
 PREFERRED = {
     "weather": {
-        "measurement": "weather_current",
-        "tag": "location",
-        "target_series": "annecy",
-        "target_field": "temperature_2m",
-        "extra_fields": ["relative_humidity_2m", "wind_speed_10m", "pressure_msl",
-                         "surface_pressure", "cloud_cover", "dew_point_2m"],
-        "all_other_series": True,
+        "measurement": ["weather_current"],
+        "tag": ["location"],
+        "target_series": ["annecy"],
+        "target_field": ["temperature_2m"],
+        "extra_fields": ["relative_humidity_2m", "surface_pressure", "pressure_msl", "wind_speed_10m"],
+        # stations less than about 60 km from Annecy: far cities (Paris, Bordeaux...)
+        # say nothing about the next hours in Annecy and only add noise
+        "extra_series": ["aix_les_bains", "annemasse", "chambery", "geneve", "rumilly"],
+    },
+    "crypto": {
+        "target_series": ["BTCUSDT", "BTC", "bitcoin"],
+        "target_field": ["price", "close", "last_price", "last", "price_usd"],
+    },
+    "forex": {
+        "target_series": ["USD"],
+        "target_field": ["rate", "close", "price"],
     },
 }
+MAX_EXTRA_FIELDS = 3
 
 LIMITS = {
     "window": (3, 168),     # hours of history given to the model
@@ -43,7 +54,9 @@ LIMITS = {
     "days": (3, 365),       # days of data read from InfluxDB
     "epochs": (1, 300),     # max epochs of the neural networks (early stopping)
 }
-DEFAULT_PARAMS = {"window": 24, "horizon": 24, "days": 30, "epochs": 50}
+DEFAULT_PARAMS = {"window": 24, "horizon": 24, "days": 60, "epochs": 50}
+# the other series give their last hours only (the target keeps the whole window)
+EXTRA_HOURS = 6
 
 MAX_EXTRA_SERIES = 6
 MIN_TRAIN_WINDOWS = 30
@@ -67,6 +80,16 @@ def flux_string(value):
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def _first(candidates, available, default=None):
+    """First preferred value that exists (candidates may be a string or a list)."""
+    if isinstance(candidates, str):
+        candidates = [candidates]
+    for c in candidates or []:
+        if c in available:
+            return c
+    return default
+
+
 def _values(query_api, org, flux):
     tables = query_api.query(org=org, query=flux)
     return sorted({str(r.get_value()) for t in tables for r in t.records})
@@ -82,9 +105,7 @@ def discover(query_api, org, bucket, measurement=None, tag=None):
     if not measurements:
         raise ValueError(f"The bucket '{bucket}' has no data in the last 30 days.")
     if measurement not in measurements:
-        measurement = preferred.get("measurement")
-        if measurement not in measurements:
-            measurement = measurements[0]
+        measurement = _first(preferred.get("measurement"), measurements, measurements[0])
     m = flux_string(measurement)
 
     tag_keys = [
@@ -93,9 +114,7 @@ def discover(query_api, org, bucket, measurement=None, tag=None):
         if not k.startswith("_")
     ]
     if tag not in tag_keys:
-        tag = preferred.get("tag")
-        if tag not in tag_keys:
-            tag = tag_keys[0] if tag_keys else None
+        tag = _first(preferred.get("tag"), tag_keys, tag_keys[0] if tag_keys else None)
 
     tag_values = []
     if tag:
@@ -124,17 +143,12 @@ def default_params(options):
     preferred = PREFERRED.get(options["bucket"], {})
     fields, values = options["fields"], options["tag_values"]
 
-    target_field = preferred.get("target_field")
-    params["target_field"] = target_field if target_field in fields else (fields[0] if fields else "")
-    target_series = preferred.get("target_series")
-    params["target_series"] = target_series if target_series in values else (values[0] if values else "")
-
+    params["target_field"] = _first(preferred.get("target_field"), fields, fields[0] if fields else "")
+    params["target_series"] = _first(preferred.get("target_series"), values, values[0] if values else "")
     params["extra_fields"] = [f for f in preferred.get("extra_fields", [])
-                              if f in fields and f != params["target_field"]]
-    if preferred.get("all_other_series"):
-        params["extra_series"] = [v for v in values if v != params["target_series"]][:MAX_EXTRA_SERIES]
-    else:
-        params["extra_series"] = []
+                              if f in fields and f != params["target_field"]][:MAX_EXTRA_FIELDS]
+    params["extra_series"] = [v for v in preferred.get("extra_series", [])
+                              if v in values and v != params["target_series"]][:MAX_EXTRA_SERIES]
     return params
 
 
@@ -290,36 +304,66 @@ def predict_seasonal(X, horizon, target_col=0, period=24):
     return X[:, idx, target_col]
 
 
-def _keras_model(kind, window, n_features, horizon):
+def _keras_model(kind, input_shape, horizon):
     from tensorflow.keras import Input
-    from tensorflow.keras.layers import LSTM, Dense, Flatten
+    from tensorflow.keras.layers import LSTM, Dense, Dropout
     from tensorflow.keras.models import Model
+    from tensorflow.keras.regularizers import l2
 
-    inputs = Input(shape=(window, n_features))
-    if kind == "mlp":
-        x = Flatten()(inputs)
-        x = Dense(64, activation="relu")(x)
-        x = Dense(32, activation="relu")(x)
-    else:
+    inputs = Input(shape=input_shape)
+    if kind == "mlp":  # input already flat: (features,)
+        x = Dense(64, activation="relu", kernel_regularizer=l2(1e-3))(inputs)
+        x = Dropout(0.2)(x)
+        x = Dense(32, activation="relu", kernel_regularizer=l2(1e-3))(x)
+    else:              # LSTM reads (hours, series)
         x = LSTM(32)(inputs)
+        x = Dropout(0.2)(x)
     outputs = Dense(horizon)(x)
     return Model(inputs=inputs, outputs=outputs)
 
 
-def train_predict(kind, X_train, y_train, X_test, epochs):
+ALPHAS = np.logspace(-1, 5, 13)
+
+
+def choose_alpha(X_train, y_train, gap):
+    """Strength of the ridge regularisation, chosen BY TIME.
+
+    The usual RidgeCV uses leave-one-out on overlapping windows, which almost
+    sees the answer and picks too small an alpha. Here: train on the first 80 %
+    of the training windows, validate on the last 20 % (after a gap), keep the
+    alpha with the smallest error.
+    """
+    from sklearn.linear_model import Ridge
+
+    n = len(X_train)
+    n_val = max(1, int(n * 0.2))
+    n_fit = n - n_val - gap
+    if n_fit < 10:
+        return 10.0
+    best, best_err = 10.0, np.inf
+    for alpha in ALPHAS:
+        model = Ridge(alpha=alpha).fit(X_train[:n_fit], y_train[:n_fit])
+        err = np.mean(np.abs(model.predict(X_train[n - n_val:]) - y_train[n - n_val:]))
+        if err < best_err:
+            best, best_err = float(alpha), err
+    return best
+
+
+def train_predict(kind, X_train, y_train, X_test, epochs, gap=0):
     """Train one learned model on scaled data and predict the scaled test targets."""
     if kind == "linear":
         from sklearn.linear_model import Ridge
 
-        model = Ridge(alpha=1.0)
-        model.fit(X_train.reshape(len(X_train), -1), y_train)
-        return model.predict(X_test.reshape(len(X_test), -1)), {}
+        alpha = choose_alpha(X_train, y_train, gap)
+        model = Ridge(alpha=alpha)
+        model.fit(X_train, y_train)
+        return model.predict(X_test), {"alpha": alpha}
 
     import tensorflow as tf
     from tensorflow.keras.callbacks import EarlyStopping
 
     tf.keras.utils.set_random_seed(SEED)
-    model = _keras_model(kind, X_train.shape[1], X_train.shape[2], y_train.shape[1])
+    model = _keras_model(kind, X_train.shape[1:], y_train.shape[1])
     model.compile(optimizer="adam", loss="mse")
     history = model.fit(
         X_train, y_train,
@@ -328,6 +372,30 @@ def train_predict(kind, X_train, y_train, X_test, epochs):
         callbacks=[EarlyStopping(patience=5, restore_best_weights=True)],
     )
     return model.predict(X_test, verbose=0), {"epochs_run": len(history.history["loss"])}
+
+
+def model_inputs(kind, X_scaled, cols):
+    """What each model reads.
+
+    Every series is given RELATIVE to its last value in the window (its recent
+    changes), so a model is not confused when the level drifts (colder in
+    November than in October). The level of the target is kept as one input.
+    Linear and MLP: the whole window of the target + the last EXTRA_HOURS hours
+    of the other series, flattened (fewer inputs = less overfitting).
+    LSTM: the whole window of every chosen series, hour by hour.
+    """
+    X = X_scaled[:, :, cols]
+    level = X[:, -1, 0]
+    X = X - X[:, -1:, :]
+    window = X.shape[1]
+    if kind == "lstm":
+        level_step = np.repeat(level[:, None, None], window, axis=1)
+        return np.concatenate([X, level_step], axis=2)
+    parts = [X[:, :-1, 0], level[:, None]]
+    if X.shape[2] > 1:
+        k = min(EXTRA_HOURS, window)
+        parts.append(X[:, window - k:-1, 1:].reshape(len(X), -1))
+    return np.concatenate(parts, axis=1)
 
 
 def run_forecast(frame, params, models=None):
@@ -346,7 +414,13 @@ def run_forecast(frame, params, models=None):
     std = train_rows.std(axis=0)
     std[std == 0] = 1.0
     X_scaled = (X_all - mean) / std
-    y_scaled = (y - mean[0]) / std[0]
+
+    # the learned models predict the CHANGE from the last known value
+    # (if they learn nothing, they give the naive forecast instead of nonsense)
+    last = X_all[:, -1, 0]
+    change = y - last[:, None]
+    change_std = float(change[:n_train].std()) or 1.0
+    change_scaled = change / change_std
 
     y_test = y[test_start:]
     results = {}
@@ -369,12 +443,12 @@ def run_forecast(frame, params, models=None):
     for key in [k for k in LEARNED if k in models]:
         for variant, cols in variants:
             start = time.time()
+            inputs = model_inputs(key, X_scaled, cols)
             pred_scaled, extra = train_predict(
-                key,
-                X_scaled[:n_train][:, :, cols], y_scaled[:n_train],
-                X_scaled[test_start:][:, :, cols], params["epochs"],
+                key, inputs[:n_train], change_scaled[:n_train], inputs[test_start:], params["epochs"],
+                gap=window + horizon - 1,
             )
-            pred = np.asarray(pred_scaled) * std[0] + mean[0]
+            pred = last[test_start:, None] + np.asarray(pred_scaled) * change_std
             if variant == "all":
                 results.setdefault(key, {})["prediction"] = pred
             add(key, variant, pred, time.time() - start, extra)
@@ -393,13 +467,13 @@ def run_forecast(frame, params, models=None):
     best = min(table, key=lambda r: r["mae"])["key"]
 
     # chart: the last test window (history, real future, every prediction)
-    last = len(X_all) - 1
+    w = len(X_all) - 1  # last window
     times = frame.index
-    history_times = times[last:last + window]
-    future_times = times[last + window:last + window + horizon]
+    history_times = times[w:w + window]
+    future_times = times[w + window:w + window + horizon]
     chart = {
-        "history": [round(float(v), 2) for v in values[last:last + window, 0]],
-        "real": [round(float(v), 2) for v in y[last]],
+        "history": [round(float(v), 2) for v in values[w:w + window, 0]],
+        "real": [round(float(v), 2) for v in y[w]],
         "history_times": [t.strftime("%d/%m %Hh") for t in history_times],
         "future_times": [t.strftime("%d/%m %Hh") for t in future_times],
         "predictions": {k: [round(float(v), 2) for v in results[k]["prediction"][-1]] for k in results},

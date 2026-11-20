@@ -317,8 +317,8 @@ Forecast · Time series
                 <h3>Result</h3>
                 <p>
                     Choose what to predict and which other variables and stations to give to the models,
-                    then press <strong>Train and compare</strong>. With 30 days of data the five models
-                    train in less than a minute.
+                    then press <strong>Train and compare</strong>. With 60 days of data the five models
+                    train in less than a minute. Nearby stations are ticked by default: far cities only add noise.
                 </p>
                 {% endif %}
 
@@ -340,13 +340,13 @@ Forecast · Time series
                     <table class="table table-dark table-sm align-middle mb-0">
                         <tbody>
                             <tr><th>Data</th><td>One value per hour for every variable of every chosen station (Flux <code>aggregateWindow(every: 1h)</code>), holes of up to 3 hours filled by interpolation.</td></tr>
-                            <tr><th>Windows</th><td>Like <code>format_dataset</code> (Sessions 2&ndash;3, &sect;7.4): the last x hours of all series as input, the next hours of the target as output.</td></tr>
+                            <tr><th>Windows</th><td>Like <code>format_dataset</code> (Sessions 2&ndash;3, &sect;7.4): the last x hours of all series as input, the next hours of the target as output. Each series is given relative to its last value (its recent changes), and the models predict the <em>change</em> from the last temperature.</td></tr>
                             <tr><th>Split</th><td>By time, never shuffled: the first 80 % to train, the last 20 % to test, with a gap so no hour is used in both. Scaling is computed on the training hours only.</td></tr>
                             <tr><th>Naive</th><td>The next hours equal the last known value. A model must beat it to be useful.</td></tr>
                             <tr><th>Seasonal naive</th><td>The next hours equal the same hours of the previous day (needs a window of at least 24 h and a horizon of at most 24 h).</td></tr>
-                            <tr><th>Linear regression</th><td>Ridge regression on all the values of the window.</td></tr>
-                            <tr><th>MLP</th><td>Dense network 64 &rarr; 32 &rarr; horizon (TensorFlow), early stopping on the most recent 10 % of the training windows.</td></tr>
-                            <tr><th>LSTM</th><td>Recurrent network with 32 units that reads the window hour by hour (TensorFlow), same training.</td></tr>
+                            <tr><th>Linear regression</th><td>Ridge regression on the target window and the last 6 hours of the other series; the strength of the regularisation is chosen by time on the training windows.</td></tr>
+                            <tr><th>MLP</th><td>Dense network 64 &rarr; 32 &rarr; horizon with dropout and L2 (TensorFlow), same inputs as the linear model, early stopping on the most recent 10 % of the training windows.</td></tr>
+                            <tr><th>LSTM</th><td>Recurrent network with 32 units and dropout that reads the whole window of every series hour by hour (TensorFlow), same training.</td></tr>
                         </tbody>
                     </table>
                 </div>
