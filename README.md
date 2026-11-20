@@ -487,20 +487,19 @@ Our runs use these values for everything we do not change, with 50,000 training 
 |---|---|---|---|
 | Subject | 270,372 | 2.8492 | 0.2864 |
 | Default values of the page | 270,372 | 2.6540 | **0.3555** |
-| coarse labels (20 classes) | 260,052 | TODO | TODO |
-| filters = 64 | 679,012 | TODO | TODO |
-| dense_units = 512 | 512,932 | TODO | TODO |
-| learning_rate = 0.0005 | 270,372 | TODO | TODO |
-| learning_rate = 0.01 | 270,372 | TODO | TODO |
-| optimizer = rmsprop | 270,372 | TODO | TODO |
-| optimizer = sgd | 270,372 | TODO | TODO |
-| batch_size = 128 | 270,372 | TODO | TODO |
+| coarse labels (20 classes) | 260,052 | 1.6908 | 0.4928 |
+| filters = 64 | 679,012 | 2.5880 | 0.3624 |
+| learning_rate = 0.01 | 270,372 | 4.6075 | 0.0100 |
+| optimizer = sgd | 270,372 | 4.5958 | 0.0187 |
 
 What we noticed with the default values:
 - The test accuracy is 0.3555. A random guess gives 0.01 on 100 classes, so the model learned a lot, but CIFAR-100 is hard: 100 classes, small images and only 500 training images per class.
 - **The model overfits.** The training accuracy keeps rising (7.6 % at epoch 1, 46.2 % at epoch 10) but the validation accuracy stops around 34.5–34.9 % from epoch 8, and the validation loss is the lowest at epoch 9 (2.6352) then goes up again (2.6661). More epochs would not help.
 - We get a better score than the subject (0.2864) with the same architecture. Each number comes from one run, and the results change from one run to another because the weights start with random values.
-- TODO: comment the table above (coarse labels, filters, learning rate, optimizer, batch size).
+- **Coarse labels** give the best score (0.4928), but it is an easier problem (20 classes instead of 100, a random guess gives 0.05), so this score cannot be compared with the fine labels.
+- **filters = 64** gives 0.3624 against 0.3555 with 32 filters, with 2.5 times more parameters (679,012 against 270,372). The gain is small, about the size of the differences between two runs, so a bigger model is not worth it here: the problem is the overfitting, not the size of the model.
+- **learning_rate = 0.01 with adam is too high**: the accuracy stays at 0.0100, the same as a random guess, and the loss (4.6075) does not go below ln(100) = 4.605, the loss of a model that learns nothing. The default 0.001 works.
+- **optimizer = sgd** (learning rate 0.001) learns very slowly: the test accuracy is only 0.0187 and the loss goes from 4.6066 to 4.5962 in 10 epochs, just under ln(100). The curves still go in the right direction, so it needs a bigger learning rate or many more epochs. Unlike adam, sgd does not adapt the step of each weight.
 
 ### Role of each hyperparameter
 
