@@ -53,12 +53,17 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 ### PyTorch on CPU, GPU and TPU (PW4)
 - Google Colab notebook comparing the training and inference times of the same network on CPU, GPU and TPU.
 
+### Land cover from a satellite image (PW5)
+- Google Colab notebook that trains a VGG16 classifier on the EuroSAT dataset (RGB, 10 land cover classes).
+- Upload a satellite screenshot (for example from Google Earth): the image is cut into patches, every patch is classified and the land cover map is drawn (`/landcover/`).
+- Download the map as a `.npy` matrix.
+
 ## Technologies
 - Python 3.12, Flask, Jinja2
 - Flask-SQLAlchemy and SQLite (Chinook database)
 - InfluxDB 2.x and the Flux language (time series)
 - scikit-learn (random forest, K-Means, linear regression)
-- TensorFlow / Keras (MLP, CNN, LSTM)
+- TensorFlow / Keras (MLP, CNN, LSTM, VGG16 for the land cover)
 - OpenCV and ONNX (YOLO object detection)
 - NumPy and pandas
 - PyTorch in Google Colab (PW4)
@@ -87,11 +92,13 @@ Advanced-Programming/
 │   │   ├── random_forest.py      # /rf/                  PW1
 │   │   ├── mlp.py                # /mlp/                 PW2
 │   │   ├── cnn.py                # /cnn/                 PW3
+│   │   ├── landcover.py          # /landcover/           PW5
 │   │   └── yolo.py               # /yolo/                object detection
 │   ├── services/                 # the models and the computations of each page
 │   ├── utils/dataset.py          # windows for time series (format_dataset, make_windows)
 │   ├── templates/                # one page per feature + base.html and home.html
 │   ├── static/                   # CSS, uploaded images (not committed)
+│   ├── models_store/             # PW5 model: eurosat_vgg16.keras and class_indices.npy
 │   ├── MNIST_keras_CNN.h5        # given CNN (Ex 3)
 │   ├── mnist_mlp.keras           # our PW2 MLP, saved by train_mnist_mlp.py
 │   ├── yolov8n.onnx              # YOLO model
@@ -559,6 +566,70 @@ To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), th
 - The reason is the batch size of 4 and the very small model: each step sends only 4 images to the accelerator and does very little computation, so most of the time is spent on transfers and loading the data, not on computing. With bigger batches and a bigger model, the GPU and TPU would be much faster.
 - Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.
 - Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.
+
+## PW5 – Land cover from a satellite image (VGG16, EuroSAT)
+
+Notebook: `notebooks/PW5_eurosat_vgg16.ipynb` (open it in Google Colab, GPU runtime).
+Page: `http://localhost:5004/landcover/`
+
+The notebook trains a **VGG16** network on **EuroSAT** (Sentinel-2 images of 64x64 pixels, 10 classes: AnnualCrop, Forest, HerbaceousVegetation, Highway, Industrial, Pasture, PermanentCrop, Residential, River, SeaLake) and saves the model.
+The page uses this model for the **inference**: you upload a satellite screenshot (for example from Google Earth), the image is cut into square patches, every patch is classified, and the page shows the screenshot next to the land cover map, a table with the share of every class and a button to download the map as `landcover.npy`.
+
+Files:
+- `app/routes/landcover.py` – the `/landcover/` route (upload, patch size, download of the `.npy`)
+- `app/services/landcover.py` – loading the model, cutting the image, classifying the patches, drawing the map
+- `app/templates/landcover_dashboard.html` – the page
+- `app/models_store/eurosat_vgg16.keras` and `app/models_store/class_indices.npy` – the model and the class names saved by the notebook
+
+### The model (notebook)
+
+- **VGG16** with the ImageNet weights, without its top layers, used as a frozen feature extractor (`pooling='avg'`), then a dense layer of 2048 neurons (relu) and a softmax layer with 10 neurons.
+- Images of 64x64x3, pixels divided by 255 (`ImageDataGenerator(rescale=1./255)`), with data augmentation for the training.
+- `categorical_crossentropy`, Adagrad, batch size 128, up to 50 epochs with early stopping and a checkpoint on the best validation accuracy.
+- The notebook saves `vgg16_eurosat.keras` and `class_indices.npy` (the dictionary class name → number).
+
+### The inference (the page and the notebook)
+
+1. Load the image and keep 3 channels (RGB).
+2. Loop over `y`, then over `x`: cut a square patch of `patch size` pixels.
+3. Resize the patch to 64x64, divide by 255 and classify it with the model.
+4. Put the class of every patch of a row in a vector, then the vectors in a matrix of the classes (one row per `y`, one column per `x`).
+5. Save the matrix in `.npy` format and display it as a coloured map with a legend.
+
+### What we paid attention to
+
+- **The 13-band version of EuroSAT is not the right one.** `EuroSATallBands` is a 2 GB archive of `.tif` files with 13 spectral bands, but the subject asks for 3 bands (RGB). We use the RGB version: 27,000 `.jpg` images of 64x64 pixels (`EuroSAT_RGB`, downloaded by the first cell of the notebook).
+- **The inference must prepare the image exactly like the training.** The model was trained with pixels divided by 255. With the VGG16 `preprocess_input` (BGR and mean subtraction) the page would give wrong classes without any error.
+- **A screenshot is often an RGBA PNG** (4 channels). The image is converted to RGB, otherwise the model would get the wrong shape.
+- **The scale of the image.** A EuroSAT image of 64 pixels covers about 640 m (10 m per pixel). A Google Earth screenshot has another scale, so the **patch size** can be chosen (for example 128): the patch is cut with this size and resized to 64x64 for the model.
+- **The matrix has the shape `[y, x]`** (rows, columns), like every image in NumPy: its size is the number of patches in height × the number of patches in width.
+- **The classes come from `class_indices.npy`**, saved by the notebook with the same order as the output of the model, and are not typed again by hand.
+- The model file must be called `eurosat_vgg16.keras` in `app/models_store/` (the notebook saves it as `vgg16_eurosat.keras`, so it is renamed). If it is missing, the page shows a message instead of an error.
+- `*.keras` files are ignored by git, so the model needs an exception in `.gitignore`, as for `mnist_mlp.keras`. Without it the Docker image built by the continuous integration does not contain the model.
+- Elements of the screenshot that are not ground (buttons, search box, pop-up windows of Google Earth) are classified like any other patch. The screenshot should be cropped.
+- The classification of 28 patches takes about 0.3 s.
+
+### Results
+
+Example with a Google Earth screenshot (987x622 px), patch size 128: 28 patches (4 rows × 7 columns), `landcover.npy` of shape `(4, 7)`.
+
+| Class | Patches | Area |
+|---|---|---|
+| AnnualCrop | 11 | 39.3 % |
+| Residential | 5 | 17.9 % |
+| Highway | 4 | 14.3 % |
+| PermanentCrop | 4 | 14.3 % |
+| River | 2 | 7.1 % |
+| HerbaceousVegetation | 1 | 3.6 % |
+| Industrial | 1 | 3.6 % |
+
+<!-- Paste here the test accuracy and the confusion matrix printed by the notebook -->
+
+What we noticed:
+- The screenshot is mostly farmland, so `AnnualCrop` and `PermanentCrop` dominate, and `Residential` appears where the villages are. The result looks plausible.
+- Some patches are wrong (for example `Highway` on field roads and parcel limits). The model learned on Sentinel-2 images (colours, resolution and angle of the sensor), and a Google Earth image looks different: the score on the EuroSAT test set is therefore better than what we see on a screenshot.
+- The notebook trains on 20 % of the images only (`train_size = 0.2`, to keep the training short on a free Colab GPU), so the model could be improved with more data.
+- The result changes with the patch size, because the patch must contain enough of one kind of ground: too small, it sees only a part of a field, too big, it mixes several kinds of ground.
 
 ## Object detection with YOLO
 
