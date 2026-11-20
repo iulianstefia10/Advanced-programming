@@ -51,3 +51,6 @@ app/data/
 # Images uploaded through the site
 app/static/uploads/*
 !app/static/uploads/.gitkeep
+
+app/models_store/
+app/static/landcover/

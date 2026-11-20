@@ -2,6 +2,7 @@ from flask import Flask, render_template
 from models.chinook import Artist, Album, Genre, Track, Customer, Invoice, InvoiceLine
 from influxdb_flask import InfluxDB
 import os
+from routes.landcover import landcover_bp
 
 from dotenv import load_dotenv
 from extensions import db
@@ -88,6 +89,7 @@ def create_app():
     app.register_blueprint(apparent_bp)
     app.register_blueprint(yolo_bp)
     app.register_blueprint(forecast_bp)
+    app.register_blueprint(landcover_bp)
 
     return app
 
