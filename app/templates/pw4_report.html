@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}
+PW4 · PyTorch on CPU, GPU and TPU
+{% endblock %}
+
+{% block content %}
+
+<section class="hero">
+
+    <div class="hero-badge">
+        <i class="bi bi-gpu-card"></i>
+        PRACTICAL WORK 4 &middot; PYTORCH
+    </div>
+
+    <h1>
+        CPU, GPU <span>and TPU.</span>
+    </h1>
+
+    <p>
+        Report of PW4: a small CNN trained on CIFAR-10 with PyTorch on Google Colab,
+        and the comparison of the computation times on different hardware.
+    </p>
+
+</section>
+
+
+<section class="container pb-5">
+
+    <!-- 1. What we did -->
+    <div class="database-card mb-4">
+
+        <h3>1. What we did</h3>
+
+        <p>
+            The given notebook trains a small convolutional network (2 convolution layers,
+            3 dense layers, about 62,000 parameters) on the CIFAR-10 dataset
+            (50,000 training images of 32×32 pixels, 10 classes: plane, car, bird, cat, deer,
+            dog, frog, horse, ship, truck) for 2 epochs with batches of 4 images,
+            then tests it on the 10,000 test images.
+        </p>
+
+        <p class="mb-0">
+            We ran the same notebook on our laptop and on Google Colab with the three runtime types
+            (<em>Runtime &gt; Change runtime type</em>: CPU, GPU T4, TPU v5e-1) and recorded
+            the training time, the inference time and the accuracy.
+            Notebook: <code>notebooks/PW4_pytorch_cpu_gpu_tpu.ipynb</code>.
+        </p>
+
+    </div>
+
+
+    <!-- 2. What we fixed -->
+    <div class="database-card mb-4">
+
+        <h3>2. What we had to fix in the notebook</h3>
+
+        <ul class="mb-0">
+            <li>
+                <strong>Errors 1, 2 and 3 (<code>Input type and weight type</code>)</strong>:
+                the model was on the GPU but the test images stayed on the CPU.
+                In the first test cell the code moved <code>inputs</code> (from the training loop)
+                instead of <code>images</code>. We send <code>images</code> and <code>labels</code>
+                to the device in the three test cells.
+            </li>
+            <li>The <strong>inference time</strong> was not measured, we added it.</li>
+            <li>
+                The GPU and the TPU work <strong>asynchronously</strong>, so we wait for them
+                (<code>synchronize</code>) before reading the time, otherwise the time is wrong.
+            </li>
+            <li>
+                <strong>TPU</strong>: the notebook only looked for <code>torch_xla</code>, which is not
+                installed on the new Colab TPU runtime, so it ran on the CPU without any error.
+                We choose the device with <code>torch.accelerator</code> (GPU or TPU)
+                and keep <code>torch_xla</code> for older runtimes.
+            </li>
+            <li>
+                On the TPU runtime the <code>DataLoader</code> worker processes crashed the session,
+                so we use <code>num_workers=0</code> there.
+            </li>
+        </ul>
+
+    </div>
+
+
+    <!-- 3. Results -->
+    <div class="database-card mb-4">
+
+        <h3>3. Results</h3>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-sm align-middle mb-3">
+                <thead>
+                    <tr>
+                        <th>Hardware</th>
+                        <th>Training (2 epochs)</th>
+                        <th>Inference (10,000 images)</th>
+                        <th>Accuracy</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in hardware_results %}
+                    <tr class="hardware-row">
+                        <td>{{ line.hardware }}</td>
+                        <td>{{ line.training }} s</td>
+                        <td>{{ line.inference }} s</td>
+                        <td>{{ line.accuracy }} %</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <h4 class="h6">Conclusion</h4>
+        <ul class="mb-0">
+            <li>
+                The TPU was the fastest for training and the GPU for inference, but the differences
+                are small: the GPU is only 1.4 times faster than the Colab CPU.
+            </li>
+            <li>
+                The reason is the batch size of 4 and the very small model: each step sends only
+                4 images to the accelerator and does very little computation, so most of the time
+                is spent on transfers and loading the data. With bigger batches and a bigger model,
+                the GPU and the TPU would be much faster.
+            </li>
+            <li>Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.</li>
+            <li>The accuracy is the same everywhere (about 55 %): the hardware changes the speed, not what the model learns.</li>
+            <li>Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.</li>
+        </ul>
+
+    </div>
+
+
+    <!-- 4. Try it -->
+    <div class="row g-4">
+
+        <div class="col-lg-4">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                </div>
+
+                <h3>4. Try the models</h3>
+
+                <p>
+                    Upload one image. It is classified by our trained CNN (exported to ONNX)
+                    and by a pretrained model, on the CPU of this server.
+                </p>
+
+                <form action="{{ url_for('pw4.dashboard') }}" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file" accept="image/*"
+                           class="form-control bg-dark text-white border-secondary mb-3" required>
+                    <button type="submit" class="btn-modern w-100 border-0" style="cursor: pointer;">
+                        Inference
+                        <i class="bi bi-arrow-right"></i>
+                    </button>
+                </form>
+
+                <p class="small mt-3 mb-0">
+                    Our CNN only knows the 10 CIFAR-10 classes, so try a photo of a car, a cat,
+                    a dog, a bird, a horse, a ship, a plane, a truck, a deer or a frog.
+                    The image is not saved.
+                </p>
+
+                {% if error %}
+                <p class="mt-3 mb-0" style="color: #ff304f;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>{{ error }}
+                </p>
+                {% endif %}
+
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="database-card">
+
+                <h3>Predictions</h3>
+
+                {% if results %}
+                <div class="row g-3">
+                    {% for key in ["cnn", "mobilenet"] %}
+                    {% set r = results[key] %}
+                    <div class="col-md-6 model-result" data-model="{{ key }}">
+                        <p class="mb-1"><strong>{{ r.name }}</strong></p>
+                        <p class="small mb-2">{{ r.info }}</p>
+                        {% for p in r.top %}
+                        <div class="d-flex justify-content-between">
+                            <span {% if loop.first %}class="top-label" style="color: #ff304f; font-weight: 700;"{% endif %}>{{ p.label }}</span>
+                            <span>{{ p.probability }} %</span>
+                        </div>
+                        <div style="background: #2a2a2a; border-radius: 3px; height: 6px;" class="mb-2">
+                            <div style="width: {{ p.probability }}%; background: {% if loop.first %}#ff304f{% else %}#777{% endif %}; height: 6px; border-radius: 3px;"></div>
+                        </div>
+                        {% endfor %}
+                        <p class="small mb-0">Inference time on the server CPU: <strong class="time-ms">{{ r.time_ms }} ms</strong></p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="mb-0">Upload an image and click <strong>Inference</strong> to compare the two models.</p>
+                {% endif %}
+
+                <p class="small mt-3 mb-0">
+                    The site does not use PyTorch: the two models were exported once to the ONNX format
+                    (<code>notebooks/pw4_export_models.py</code>) and are read with OpenCV.
+                </p>
+
+            </div>
+        </div>
+
+    </div>
+
+
+    <div class="text-center mt-5">
+        <a href="/" class="btn-outline-modern">
+            <i class="bi bi-arrow-left"></i>
+            Back to DataHub
+        </a>
+    </div>
+
+</section>
+
+{% endblock %}

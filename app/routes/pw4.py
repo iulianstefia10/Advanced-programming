@@ -1,0 +1,44 @@
+import io
+
+from flask import Blueprint, render_template, request
+from PIL import Image, UnidentifiedImageError
+
+from services.pw4_inference import classify
+
+pw4_bp = Blueprint(
+    "pw4",
+    __name__,
+    url_prefix="/pw4",
+)
+
+# results we measured with the notebook (static report)
+HARDWARE_RESULTS = [
+    {"hardware": "CPU (our laptop)", "training": 113, "inference": 9, "accuracy": 55},
+    {"hardware": "Colab CPU (Intel Xeon 2.2 GHz)", "training": 168, "inference": 10, "accuracy": 55},
+    {"hardware": "Colab GPU (NVIDIA T4)", "training": 119, "inference": 7, "accuracy": 54},
+    {"hardware": "Colab TPU (v5e-1)", "training": 96, "inference": 8, "accuracy": 55},
+]
+
+
+@pw4_bp.route("/", methods=["GET", "POST"])
+def dashboard():
+    results = None
+    error = None
+
+    if request.method == "POST":
+        file = request.files.get("file")
+        if file is None or file.filename == "":
+            error = "Choose an image first."
+        else:
+            try:
+                image = Image.open(io.BytesIO(file.read()))
+                results = classify(image)
+            except (UnidentifiedImageError, OSError):
+                error = "The file is not a valid image."
+
+    return render_template(
+        "pw4_report.html",
+        hardware_results=HARDWARE_RESULTS,
+        results=results,
+        error=error,
+    )
