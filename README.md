@@ -703,6 +703,16 @@ Files:
 
 The easiest way to use YOLO is the `ultralytics` package, but it installs **PyTorch**, which would make our Docker image (already about 4.3 GB because of TensorFlow) much bigger. So we exported the model once to the **ONNX** format (in a separate container, with `yolo export model=yolov8n.pt format=onnx`) and we read it with **OpenCV** (`cv2.dnn`), which is already in the requirements. The site does not need PyTorch at all.
 
+We measured the size in a clean `python:3.12-slim` container:
+
+| What is installed | Size |
+|---|---|
+| `opencv-python-headless` (what we use) | 223 MB |
+| `torch` + `torchvision` (CPU) + `ultralytics` on top | 958 MB more |
+| the model `yolov8n.onnx` | 12 MB |
+
+So the ONNX + OpenCV way saves almost **1 GB** in the Docker image (and the CUDA version of PyTorch, installed by default, is even bigger).
+
 What we had to do ourselves, because `ultralytics` normally does it:
 - **Letterbox**: the model wants a 640×640 image, so the photo is resized without changing its proportions and grey bands are added.
 - **Reading the output**: the model returns a table of 84 × 8400 (4 numbers for the box + 80 class scores, for 8400 positions). We keep the positions above the threshold and convert the boxes back to the size of the original photo.
