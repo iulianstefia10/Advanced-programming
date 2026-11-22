@@ -52,6 +52,7 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 
 ### PyTorch on CPU, GPU and TPU (PW4)
 - Google Colab notebook comparing the training and inference times of the same network on CPU, GPU and TPU.
+- Report page `/pw4/` with the results, and an Inference button to test our exported model and a pretrained model on one image.
 
 ### Land cover from a satellite image (PW5)
 - Google Colab notebook that trains a VGG16 classifier on the EuroSAT dataset (RGB, 10 land cover classes).
@@ -594,34 +595,27 @@ The tests check the form values, the number of parameters (270,372 and 260,052 w
 
 ## PW4 – PyTorch on CPU, GPU and TPU
 
-Notebook: `notebooks/PW4_pytorch_cpu_gpu_tpu.ipynb` (open it in Google Colab).
+**The report is on the site, on the page `http://localhost:5004/pw4/`** (as asked by the teacher, not in this README): what we did, what we fixed in the given notebook, the results on CPU, GPU and TPU and the conclusion.
+On the same page you can upload one image and click **Inference** to compare our trained model with a pretrained model.
 
-A small CNN is trained on CIFAR-10 for 2 epochs, then tested on the 10,000 test images.
-To compare the hardware: **Runtime > Change runtime type** (CPU, GPU or TPU), then **Run all**. The last cell prints the times.
+Files:
+- `notebooks/PW4_pytorch_cpu_gpu_tpu.ipynb` – the fixed notebook (open it in Google Colab, choose CPU, GPU or TPU, then Run all)
+- `notebooks/pw4_export_models.py` – trains the same CNN (2 epochs on CIFAR-10) and exports it to ONNX, and exports a MobileNetV2 pretrained on ImageNet
+- `app/pw4_cifar10_cnn.onnx` (0.25 MB), `app/pw4_mobilenet_v2.onnx` (14 MB), `app/pw4_imagenet_classes.txt` – the exported models
+- `app/services/pw4_inference.py`, `app/routes/pw4.py`, `app/templates/pw4_report.html` – the page
 
-### What we fixed in the given notebook
+The site does not install PyTorch: the models are read with OpenCV (`cv2.dnn`).
+To export them again (needs `torch` and `torchvision`):
 
-- **Errors 1, 2 and 3 (`Input type`)**: the model was on the GPU but the test images stayed on the CPU. In the first one, the code moved `inputs` (from the training loop) instead of `images`. We send `images` and `labels` to the device in the three test cells.
-- The **inference time** was not measured, we added it.
-- The GPU and TPU work asynchronously, so we synchronize before reading the time.
-- **TPU**: the notebook only looked for `torch_xla`, which is not installed on the new Colab TPU runtime, so it silently ran on the CPU. The new runtime uses `torch_tpu`, so we choose the device with `torch.accelerator` (GPU or TPU), and keep `torch_xla` for older runtimes.
-- On the TPU runtime the `DataLoader` worker processes crashed the session, so we use `num_workers=0` there.
+```bash
+python notebooks/pw4_export_models.py
+```
 
-### Results
+Tests:
 
-| Hardware | Training (2 epochs) | Inference (10,000 images) | Accuracy |
-|---|---|---|---|
-| CPU (our laptop) | 113 s | 9 s | 55 % |
-| Colab CPU (Intel Xeon 2.2 GHz) | 168 s | 10 s | 55 % |
-| Colab GPU (T4) | 119 s | 7 s | 54 % |
-| Colab TPU (v5e-1) | 96 s | 8 s | 55 % |
-
-### Conclusion
-
-- The TPU was the fastest for training and the GPU for inference, but the differences are small: the GPU is only 1.4 times faster than the Colab CPU.
-- The reason is the batch size of 4 and the very small model: each step sends only 4 images to the accelerator and does very little computation, so most of the time is spent on transfers and loading the data, not on computing. With bigger batches and a bigger model, the GPU and TPU would be much faster.
-- Our laptop CPU was faster than the Colab CPU, so for such a small model a GPU is not really needed.
-- Using the TPU with PyTorch is not automatic: without the right library the code runs on the CPU without any error.
+```bash
+python -m unittest tests.test_pw4 -v
+```
 
 ## PW5 – Land cover from a satellite image (VGG16, EuroSAT)
 
