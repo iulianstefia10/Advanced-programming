@@ -83,6 +83,13 @@ class ClusterServiceTest(unittest.TestCase):
         second, _ = cluster_customers(self.fresh_customers(), k=3)
         self.assertEqual([c["cluster"] for c in first], [c["cluster"] for c in second])
 
+    def test_invoices_not_used_and_no_lonely_customer(self):
+        # almost every customer has 7 invoices: this number must not create
+        # a cluster with a single customer
+        self.assertNotIn("n_invoices", FEATURES)
+        _, summary = cluster_customers(self.fresh_customers(), k=3)
+        self.assertGreater(min(line["size"] for line in summary), 1)
+
     def test_wrong_k_raises(self):
         for k in (0, 1, 11):
             with self.assertRaises(ValueError):

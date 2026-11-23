@@ -16,7 +16,10 @@ from sqlalchemy import func
 from extensions import db
 from models.chinook import Customer, Genre, Invoice, InvoiceLine, Track
 
-FEATURES = ["total_spent", "n_invoices", "n_genres", "favorite_share"]
+# numbers given to K-Means. The number of invoices is shown in the tables but
+# NOT used: 58 of the 59 customers have exactly 7 invoices, so after scaling the
+# only customer with 6 invoices was far from everybody and got a cluster alone.
+FEATURES = ["total_spent", "n_genres", "favorite_share"]
 FEATURE_LABELS = {
     "total_spent": "Total spent ($)",
     "n_invoices": "Invoices",
