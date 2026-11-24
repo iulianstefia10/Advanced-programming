@@ -2,6 +2,25 @@
 
 A Flask web application developed for the R5.A.05 Advanced Programming practical exercises at IUT Annecy.
 
+The application is a "DataHub": one home page and one page for every exercise of the subject (databases, time series, classical machine learning, neural networks, inference of pre-trained models). Two databases are used: **SQLite** (the Chinook demo database) and **PostgreSQL** (our own tables, for example the digit recognition models).
+
+## Pages
+
+| Page | URL | Subject |
+|---|---|---|
+| Home | `/` | – |
+| Chinook database | `/chinook/` | Sessions 2-3, Ex 1 (+ customer clusters, `/chinook/clusters`) |
+| InfluxDB | `/influxdb/` | Sessions 2-3, Ex 2 |
+| Time-series forecasting | `/forecast/` | Sessions 2-3, Ex 2 (§7.4), extended |
+| Apparent temperature | `/apparent/` | Session 1, §5.4 |
+| Digit recognition (models in PostgreSQL) | `/mnist/` | Sessions 2-3, Ex 3 (§8.2 to §8.4) |
+| Random Forest | `/rf/` | PW1 |
+| Neural network on MNIST | `/mlp/` | PW2 |
+| CNN on CIFAR-100 | `/cnn/` | PW3 |
+| PyTorch on CPU, GPU and TPU (report) | `/pw4/` | PW4 |
+| Land cover from a satellite image | `/landcover/` | PW5 |
+| Object detection (YOLO) | `/yolo/` | – |
+
 ## Features
 
 ### Chinook Database
@@ -30,7 +49,8 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 
 ### Digit recognition (Session 3)
 - Draw a digit on the page or upload an image.
-- Compare the prediction of the given CNN and of our PW2 MLP, with the probabilities.
+- Choose one stored model or all of them and compare the predictions, with the probabilities.
+- The digit models are **stored in the PostgreSQL database**: import a `.h5` or `.keras` model from the page, delete it, or select it for the inference.
 
 ### Object detection (YOLO)
 - Upload a photo and find the objects with a small ready YOLO model (80 COCO classes).
@@ -61,7 +81,7 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 
 ## Technologies
 - Python 3.12, Flask, Jinja2
-- Flask-SQLAlchemy and SQLite (Chinook database)
+- Flask-SQLAlchemy with two databases: SQLite (Chinook) and PostgreSQL 15 (our own tables, `psycopg2`)
 - InfluxDB 2.x and the Flux language (time series)
 - scikit-learn (random forest, K-Means, linear regression)
 - TensorFlow / Keras (MLP, CNN, LSTM, VGG16 for the land cover)
@@ -69,7 +89,7 @@ A Flask web application developed for the R5.A.05 Advanced Programming practical
 - NumPy and pandas
 - PyTorch in Google Colab (PW4)
 - HTML, CSS (Bootstrap) and JavaScript (charts drawn in SVG)
-- Docker and Docker Compose
+- Docker and Docker Compose (the Flask application and the PostgreSQL service)
 - GitHub Actions (continuous integration)
 
 ## Project Structure
@@ -81,9 +101,10 @@ Advanced-Programming/
 │   ├── app.py                    # creates the Flask app, registers every page
 │   ├── extensions.py             # SQLAlchemy object
 │   ├── Dockerfile
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml        # Flask application + PostgreSQL service (db)
 │   ├── database/chinook.db       # SQLite database (Sessions 2-3, Ex 1)
-│   ├── models/                   # SQLAlchemy models (Chinook, inference models)
+│   ├── models/                   # SQLAlchemy models
+│   │   └── app_data.py           # stored_model: the digit models of /mnist/ (PostgreSQL)
 │   ├── routes/                   # one blueprint per page
 │   │   ├── chinook.py            # /chinook/...          Sessions 2-3, Ex 1 + clusters
 │   │   ├── influxdb.py           # /influxdb/...         Sessions 2-3, Ex 2
@@ -96,12 +117,13 @@ Advanced-Programming/
 │   │   ├── landcover.py          # /landcover/           PW5
 │   │   └── yolo.py               # /yolo/                object detection
 │   ├── services/                 # the models and the computations of each page
+│   │   └── model_store.py        # digit models in the database (first copy, import)
 │   ├── utils/dataset.py          # windows for time series (format_dataset, make_windows)
 │   ├── templates/                # one page per feature + base.html and home.html
 │   ├── static/                   # CSS, uploaded images (not committed)
 │   ├── models_store/             # PW5 model: eurosat_vgg16.keras and class_indices.npy
-│   ├── MNIST_keras_CNN.h5        # given CNN (Ex 3)
-│   ├── mnist_mlp.keras           # our PW2 MLP, saved by train_mnist_mlp.py
+│   ├── MNIST_keras_CNN.h5        # given CNN (Ex 3), copied into the database at the first start
+│   ├── mnist_mlp.keras           # our PW2 MLP, saved by train_mnist_mlp.py (also copied into the database)
 │   ├── yolov8n.onnx              # YOLO model
 │   ├── pw2_sensitivity.py        # PW2 results for this README
 │   └── forecast_report.py        # forecasting results for this README
@@ -129,6 +151,18 @@ Open the application at:
 
 ```text
 http://localhost:5004/
+```
+
+### PostgreSQL
+
+The `db` service (PostgreSQL 15) starts together with the application: Flask waits until it is healthy (`depends_on` with a healthcheck), and the data is kept in the `pgdata` volume, so it stays after the containers are rebuilt.
+The address comes from `DATABASE_URL`, built in `docker-compose.yml`. The password can be set with `POSTGRES_PASSWORD` in `.env` (default for local work: `password123`).
+Without `DATABASE_URL` (tests, continuous integration, running without Docker) our own tables are created in a local SQLite file, `app/database/appdata.db`, so nothing else has to be installed.
+
+To look at the data:
+
+```bash
+docker compose -f app/docker-compose.yml exec db psql -U group4 -d flask_models -c "SELECT id, name, filename, size_bytes FROM stored_model;"
 ```
 
 ## Session 1 – Apparent temperature
@@ -317,14 +351,16 @@ The tests use a fake InfluxDB (two stations, one of them sees the weather 6 hour
 Page: `http://localhost:5004/mnist/`
 
 You can draw a digit with the mouse (or a finger on a phone) or upload an image.
-The same prepared image is sent to two models and both predictions are shown with the probability of each digit:
+The same prepared image is sent to the models you choose, and every prediction is shown with the probability of each digit. Two models are available from the first start, and more can be imported:
 - **CNN**: `MNIST_keras_CNN.h5`, the model given in the subject,
 - **MLP**: our PW2 network (128-64-32, pixels divided by 255), trained once with `app/train_mnist_mlp.py` and saved in `app/mnist_mlp.keras` (test accuracy 0.974).
 
 Files:
-- `app/services/mnist_inference.py` – preparing the image and running the two models
-- `app/routes/mnist.py` – the `/mnist/` route (drawing or upload)
-- `app/templates/mnist_dashboard.html` – the canvas and the results
+- `app/services/mnist_inference.py` – preparing the image, loading a model from the database and running the models
+- `app/services/model_store.py` – copies the two given models into the database at the first start, checks and stores an imported model
+- `app/models/app_data.py` – the `stored_model` table
+- `app/routes/mnist.py` – the `/mnist/` route (drawing or upload), the import and the deletion of models
+- `app/templates/mnist_dashboard.html` – the canvas, the choice of the model, the table of models and the results
 - `app/train_mnist_mlp.py` – trains and saves the MLP (run it again only if the model must change)
 
 ### What we paid attention to
@@ -335,6 +371,36 @@ Files:
 - With this preparation, on 200 MNIST test images turned into big black-on-white drawings, the CNN is right 199 times and the MLP 195 times. The CNN is a bit better on unusual shapes (for example a 6 written with a font).
 - An uploaded file is saved in `static/uploads` only if it really is an image.
 - `*.keras` files are ignored by git (PW3 models), so `app/mnist_mlp.keras` is added as an exception in `.gitignore`.
+
+### Models in the database (Sessions 2-3, Ex 3, §8.3 and §8.4)
+
+The subject asks to store the `.h5` models in a database and to choose, import and use them from the application. The models are therefore not read from files at run time: they are stored in the `stored_model` table of PostgreSQL.
+
+| Column | Meaning |
+|---|---|
+| `id` | primary key |
+| `name` | unique name shown in the page |
+| `description` | optional text |
+| `filename` | original name (gives the `.h5` or `.keras` extension) |
+| `size_bytes` | size of the file |
+| `data` | the model file (`LargeBinary`, `BYTEA` in PostgreSQL) |
+| `created_at` | date of the import |
+
+How it works:
+1. **First start**: if the table is empty, `seed_default_models()` copies `MNIST_keras_CNN.h5` and `mnist_mlp.keras` into the database.
+2. **Page**: a list lets you choose *All models* or one model; the same 28×28 image is sent to the chosen models.
+3. **Import**: the file is written to a temporary folder (Keras loads from a file, not from bytes), loaded, and checked: it must take 28×28 pixels (784 values) and give 10 classes. Only then it is stored. A wrong file shows an error message instead of crashing the page.
+4. **Inference**: a model is read from the database and loaded once, then kept in memory. The shape of the input (`(1, 28, 28, 1)` for the CNN, `(1, 784)` for the MLP) is read from the model itself, so an imported model works without any change in the code.
+5. **Deletion**: the row is deleted and the model is removed from the memory.
+
+Two databases are used by the application. The Chinook SQLite database stays the default one; our own tables use a second connection called `appdata` (`SQLALCHEMY_BINDS`), and `db.reflect(bind_key=None)` and `db.create_all(bind_key="appdata")` keep them apart. When PostgreSQL is not reachable, the application still starts and the page shows "The model database is unavailable".
+
+What to know:
+- An imported model gets pixels between 0 and 1. A model trained without the division by 255 will give wrong results.
+- Loading a Keras file from a user can run code (especially `.h5`). It is acceptable for this course project, not for a public site.
+- The images sent to the page are still saved in `static/uploads`, not in the database.
+- The upload limit is 100 MB (`MAX_CONTENT_LENGTH`).
+- The list of the page never loads the model files (`defer`), only the file of a model that is used.
 
 ### Tests
 
@@ -737,13 +803,15 @@ A pull request should only be merged when both jobs have a green check mark on G
 
 Notes:
 - The tests use the real `chinook.db` file and the saved models, so no database server is needed in CI. InfluxDB is not reachable from GitHub, so the InfluxDB pages are not tested against the real server.
+- PostgreSQL is not started in CI either: without `DATABASE_URL`, our own tables (the digit models) are created in a local SQLite file, and the two given models are copied into it at the start.
 - The image is about 4.3 GB because of TensorFlow, so the Docker job takes a few minutes.
 
 ## Security
 - Do not commit `.env` files or API tokens.
-- Keep credentials out of source code.
+- Keep credentials out of source code. The default PostgreSQL password (`password123`) is only for local work: set `POSTGRES_PASSWORD` in `.env` for any shared server.
 - Do not expose Flask debug mode to untrusted networks.
+- Importing a Keras model from a user can run code (especially `.h5`): only import models you trust.
 
 ## Academic Context
 
-This project demonstrates Flask web development, database integration, InfluxDB time-series queries and forecasting, machine learning and deep learning models (classical ML, MLP, CNN, LSTM, object detection), data visualisation and continuous integration.
+This project demonstrates Flask web development, database integration (SQLite and PostgreSQL), InfluxDB time-series queries and forecasting, machine learning and deep learning models (classical ML, MLP, CNN, LSTM, object detection), storing and serving models from a database, data visualisation and continuous integration.
