@@ -43,35 +43,6 @@ Forecast · Time series
 
     <div class="row g-4">
 
-        <!-- How it works: closed by default, click the title to open -->
-        <div class="col-12">
-            <details class="database-card py-3">
-                <summary style="cursor: pointer;">
-                    <i class="bi bi-info-circle me-2"></i>How it works
-                </summary>
-
-                <div class="mt-3">
-                    <div class="table-responsive">
-                        <table class="table table-dark table-sm align-middle mb-0">
-                            <tbody>
-                                <tr><th>Data</th><td>One value per hour for every variable of every chosen station (Flux <code>aggregateWindow(every: 1h)</code>), holes of up to 3 hours filled by interpolation.</td></tr>
-                                <tr><th>Windows</th><td>The last x hours of all series as input, the next hours of the target as output. Each series is given relative to its last value (its recent changes), and the models predict the <em>change</em> from the last temperature.</td></tr>
-                                <tr><th>Split</th><td>By time, never shuffled: the first 80 % to train, the last 20 % to test, with a gap so no hour is used in both. Scaling is computed on the training hours only.</td></tr>
-                                <tr><th>Naive</th><td>The next hours equal the last known value. A model must beat it to be useful.</td></tr>
-                                <tr><th>Seasonal naive</th><td>The next hours equal the same hours of the previous day (needs a window of at least 24 h and a horizon of at most 24 h).</td></tr>
-                                <tr><th>Linear regression</th><td>Ridge regression on the target window and the last 6 hours of the other series; the strength of the regularisation is chosen by time on the training windows.</td></tr>
-                                <tr><th>MLP</th><td>Dense network 64 &rarr; 32 &rarr; horizon with dropout and L2 (TensorFlow), same inputs as the linear model, early stopping on the most recent 10 % of the training windows.</td></tr>
-                                <tr><th>LSTM</th><td>Recurrent network with 32 units and dropout that reads the whole window of every series hour by hour (TensorFlow), same training.</td></tr>
-                                <tr><th>MAE / RMSE</th><td>MAE = mean absolute error, the average size of the error in the units of the data (&deg;C, $). RMSE punishes big errors more. Computed on the test hours only; lower is better.</td></tr>
-                                <tr><th>Crypto and forex</th><td>Prices move almost like a random walk: the past hardly predicts the next change, so the naive forecast is expected to be the best there.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </details>
-        </div>
-
-
         <!-- Card 1: Data and parameters -->
         <div class="col-lg-5">
             <div class="database-card">
@@ -350,6 +321,37 @@ Forecast · Time series
                     train in less than a minute. Nearby stations are ticked by default: far cities only add noise.
                 </p>
                 {% endif %}
+
+            </div>
+        </div>
+
+
+        <!-- Card 3: How it works -->
+        <div class="col-12">
+            <div class="database-card">
+
+                <div class="database-icon">
+                    <i class="bi bi-info-circle"></i>
+                </div>
+
+                <h3>How it works</h3>
+
+                <div class="table-responsive">
+                    <table class="table table-dark table-sm align-middle mb-0">
+                        <tbody>
+                            <tr><th>Data</th><td>One value per hour for every variable of every chosen station (Flux <code>aggregateWindow(every: 1h)</code>), holes of up to 3 hours filled by interpolation.</td></tr>
+                            <tr><th>Windows</th><td>The last x hours of all series as input, the next hours of the target as output. Each series is given relative to its last value (its recent changes), and the models predict the <em>change</em> from the last temperature.</td></tr>
+                            <tr><th>Split</th><td>By time, never shuffled: the first 80 % to train, the last 20 % to test, with a gap so no hour is used in both. Scaling is computed on the training hours only.</td></tr>
+                            <tr><th>Naive</th><td>The next hours equal the last known value. A model must beat it to be useful.</td></tr>
+                            <tr><th>Seasonal naive</th><td>The next hours equal the same hours of the previous day (needs a window of at least 24 h and a horizon of at most 24 h).</td></tr>
+                            <tr><th>Linear regression</th><td>Ridge regression on the target window and the last 6 hours of the other series; the strength of the regularisation is chosen by time on the training windows.</td></tr>
+                            <tr><th>MLP</th><td>Dense network 64 &rarr; 32 &rarr; horizon with dropout and L2 (TensorFlow), same inputs as the linear model, early stopping on the most recent 10 % of the training windows.</td></tr>
+                            <tr><th>LSTM</th><td>Recurrent network with 32 units and dropout that reads the whole window of every series hour by hour (TensorFlow), same training.</td></tr>
+                            <tr><th>MAE / RMSE</th><td>MAE = mean absolute error, the average size of the error in the units of the data (&deg;C, $). RMSE punishes big errors more. Computed on the test hours only; lower is better.</td></tr>
+                            <tr><th>Crypto and forex</th><td>Prices move almost like a random walk: the past hardly predicts the next change, so the naive forecast is expected to be the best there.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
 
             </div>
         </div>
