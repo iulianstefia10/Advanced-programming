@@ -17,6 +17,8 @@ sys.path.insert(0, APP_DIR)
 
 from flask import Flask  # noqa: E402
 
+from extensions import db  # noqa: E402
+from models.app_data import StoredModel  # noqa: E402
 from routes.mnist import mnist_bp  # noqa: E402
 from services.mnist_inference import (  # noqa: E402
     cnn_input,
@@ -25,6 +27,7 @@ from services.mnist_inference import (  # noqa: E402
     predict_both,
     prepare_image,
 )
+from services.model_store import seed_default_models  # noqa: E402
 
 try:
     import tensorflow.keras  # noqa: F401
@@ -130,6 +133,11 @@ class MnistPageTest(unittest.TestCase):
             static_folder=os.path.join(APP_DIR, "static"),
         )
         app.config["TESTING"] = True
+        # the page reads the models from the database: use an in-memory SQLite
+        # for both the default database and the "appdata" one
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
+        app.config["SQLALCHEMY_BINDS"] = {"appdata": "sqlite://"}
+        db.init_app(app)
         # uploads go to a temporary folder, not to the real static/uploads
         self.tmp = tempfile.TemporaryDirectory()
         app.root_path = self.tmp.name
@@ -139,10 +147,29 @@ class MnistPageTest(unittest.TestCase):
         def home():
             return "home"
 
+        with app.app_context():
+            db.create_all(bind_key="appdata")
+            seed_default_models()
+
+        self.app = app
         self.client = app.test_client()
 
     def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
         self.tmp.cleanup()
+
+    def test_default_models_are_seeded(self):
+        with self.app.app_context():
+            count = db.session.query(StoredModel).count()
+        self.assertEqual(count, 2)
+
+    def test_page_lists_models_from_the_database(self):
+        with self.app.app_context():
+            names = [m.name for m in db.session.scalars(db.select(StoredModel)).all()]
+        html = self.client.get("/mnist/").get_data(as_text=True)
+        for name in names:
+            self.assertIn(name, html)
 
     def test_page_has_canvas_and_upload(self):
         html = self.client.get("/mnist/").get_data(as_text=True)
