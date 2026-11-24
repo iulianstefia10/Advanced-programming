@@ -1,5 +1,7 @@
 # PW4 - run our exported CIFAR-10 CNN and a pretrained MobileNetV2 on one image
 # Both models are ONNX files read by OpenCV, so the site does not need PyTorch.
+# PW4 на сайті: одне фото → дві моделі (наша CNN і готова MobileNetV2) → топ-3 класи + час на CPU сервера.
+# Файли .onnx створив скрипт notebooks/pw4_export_models.py.
 
 import os
 import time
@@ -10,11 +12,12 @@ from PIL import Image, ImageOps
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CNN_PATH = os.path.join(APP_DIR, "pw4_cifar10_cnn.onnx")
 MOBILENET_PATH = os.path.join(APP_DIR, "pw4_mobilenet_v2.onnx")
-IMAGENET_CLASSES_PATH = os.path.join(APP_DIR, "pw4_imagenet_classes.txt")
+IMAGENET_CLASSES_PATH = os.path.join(APP_DIR, "pw4_imagenet_classes.txt")   # 1000 назв, по одній у рядку
 
+# 10 класів CIFAR-10 у тому ж порядку, що при навчанні (вихід 0 = plane … 9 = truck)
 CIFAR10_CLASSES = ["plane", "car", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck"]
 
-_nets = {}
+_nets = {}                  # завантажені моделі: шлях → модель (щоб не читати файл щоразу)
 _imagenet_classes = None
 
 
@@ -26,6 +29,7 @@ def get_net(path):
     return _nets[path]
 
 
+# прочитати 1000 назв ImageNet один раз
 def imagenet_classes():
     global _imagenet_classes
     if _imagenet_classes is None:
@@ -42,14 +46,17 @@ def center_square(image):
     return image.crop((left, top, left + side, top + side))
 
 
+# підготовка фото для нашої CNN — так само, як transform у ноутбуці, інакше прогноз буде поганий
 def cifar10_input(image):
     # like in the notebook: 32x32, ToTensor (0-1), Normalize(0.5, 0.5) -> values between -1 and 1
     small = center_square(image).resize((32, 32), Image.BILINEAR)
     x = np.asarray(small, dtype="float32") / 255.0
     x = (x - 0.5) / 0.5
+    # (висота, ширина, канали) → (канали, висота, ширина) + вимір батчу = формат PyTorch NCHW
     return x.transpose(2, 0, 1)[np.newaxis]  # (1, 3, 32, 32)
 
 
+# підготовка для MobileNetV2: стандартна обробка torchvision для ImageNet
 def mobilenet_input(image):
     # torchvision preprocessing: shorter side 256, centre crop 224, ImageNet mean and std
     scale = 256 / min(image.size)
@@ -58,15 +65,19 @@ def mobilenet_input(image):
     top = (resized.height - 224) // 2
     crop = resized.crop((left, top, left + 224, top + 224))
     x = np.asarray(crop, dtype="float32") / 255.0
+    # середнє і стандартне відхилення кольорів ImageNet (R, G, B)
     x = (x - np.array([0.485, 0.456, 0.406], dtype="float32")) / np.array([0.229, 0.224, 0.225], dtype="float32")
     return x.transpose(2, 0, 1)[np.newaxis]  # (1, 3, 224, 224)
 
 
+# сирі виходи моделі (logits) → ймовірності, що в сумі дають 1
+# (− max лише для того, щоб exp не переповнився; результат той самий)
 def softmax(logits):
     e = np.exp(logits - logits.max())
     return e / e.sum()
 
 
+# ЗМІНА: repeats=10 — скільки разів запускати для середнього часу (напр. 50 → точніший час)
 def run_model(path, model_input, classes, repeats=10):
     """Prediction (top 3) and mean inference time on the server CPU."""
     net = get_net(path)
@@ -77,9 +88,11 @@ def run_model(path, model_input, classes, repeats=10):
     for _ in range(repeats):
         net.setInput(model_input)
         logits = net.forward()
-    time_ms = (time.perf_counter() - start) / repeats * 1000
+    time_ms = (time.perf_counter() - start) / repeats * 1000    # середній час одного запуску в мс
 
     probabilities = softmax(logits.flatten())
+    # номери класів від найімовірнішого; [:3] = топ-3
+    # ЗМІНА: топ-5: [:5] (шаблон показує весь список сам)
     top = probabilities.argsort()[::-1][:3]
     return {
         "top": [{"label": classes[i], "probability": round(float(probabilities[i]) * 100, 1)} for i in top],
@@ -87,6 +100,7 @@ def run_model(path, model_input, classes, repeats=10):
     }
 
 
+# обидві моделі на тому самому фото; name/info — тексти для карток на сторінці
 def classify(image):
     """Run the two models on the same image."""
     image = ImageOps.exif_transpose(image).convert("RGB")
@@ -101,4 +115,5 @@ def classify(image):
             name="MobileNetV2 (pretrained on ImageNet)",
             info="Pretrained model from torchvision, 1000 classes, 224×224 input, about 3.5 million parameters",
         ),
+        # ЗМІНА: третя модель — додати сюди ще один запис і її .onnx (експорт у pw4_export_models.py)
     }

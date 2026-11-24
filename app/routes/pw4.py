@@ -1,3 +1,5 @@
+# Сторінка /pw4/: звіт PW4 (таблиця CPU/GPU/TPU з ноутбука) + кнопка розпізнати своє фото двома моделями.
+
 import io
 
 from flask import Blueprint, render_template, request
@@ -5,6 +7,7 @@ from PIL import Image, UnidentifiedImageError
 
 from services.pw4_inference import classify
 
+# група сторінок PW4, адреса /pw4/
 pw4_bp = Blueprint(
     "pw4",
     __name__,
@@ -12,6 +15,9 @@ pw4_bp = Blueprint(
 )
 
 # results we measured with the notebook (static report)
+# числа виміряні в ноутбуці (не рахуються на сайті): час навчання 2 епох (с),
+# час перевірки на 10 000 тестових фото (с), точність (%)
+# ЗМІНА: новий рядок, напр. {"hardware": "Colab GPU (A100)", "training": ..., "inference": ..., "accuracy": ...}
 HARDWARE_RESULTS = [
     {"hardware": "CPU (our laptop)", "training": 113, "inference": 9, "accuracy": 55},
     {"hardware": "Colab CPU (Intel Xeon 2.2 GHz)", "training": 168, "inference": 10, "accuracy": 55},
@@ -20,6 +26,7 @@ HARDWARE_RESULTS = [
 ]
 
 
+# GET — звіт; POST — надіслали фото
 @pw4_bp.route("/", methods=["GET", "POST"])
 def dashboard():
     results = None
@@ -31,8 +38,8 @@ def dashboard():
             error = "Choose an image first."
         else:
             try:
-                image = Image.open(io.BytesIO(file.read()))
-                results = classify(image)
+                image = Image.open(io.BytesIO(file.read()))    # фото з пам'яті, не з диска
+                results = classify(image)                      # {"cnn": ..., "mobilenet": ...}
             except (UnidentifiedImageError, OSError):
                 error = "The file is not a valid image."
 
