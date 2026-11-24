@@ -63,7 +63,7 @@ MLP · TensorFlow MNIST
                         <input type="text" name="hidden_layers" id="hidden_layers"
                                value="{{ params.hidden_layers }}" placeholder="empty = no hidden layer"
                                class="form-control bg-dark text-white border-secondary">
-                        <div class="form-text text-secondary">e.g. 128,64,32 &middot; empty = the subject's model</div>
+                        <div class="form-text text-secondary small">e.g. 128,64,32 &middot; empty = the subject's model<br>More neurons = more capacity: too small underfits, too big is slow and can overfit.</div>
                     </div>
 
                     <div class="mb-3">
@@ -73,6 +73,7 @@ MLP · TensorFlow MNIST
                             <option value="{{ a }}" {% if params.activation == a %}selected{% endif %}>{{ a }}</option>
                             {% endfor %}
                         </select>
+                        <div class="form-text text-secondary small">Adds non-linearity (without it, all layers = one linear layer). relu = max(0, x), fast; sigmoid / tanh saturate, so the gradient vanishes.</div>
                     </div>
 
                     <h6 class="mt-4 text-uppercase small">Training</h6>
@@ -84,6 +85,7 @@ MLP · TensorFlow MNIST
                             <option value="{{ o }}" {% if params.optimizer == o %}selected{% endif %}>{{ o }}</option>
                             {% endfor %}
                         </select>
+                        <div class="form-text text-secondary small">How the weights are updated from the gradient. adam / rmsprop adapt the step for each weight; sgd uses one fixed step, so it learns slower.</div>
                     </div>
 
                     <div class="mb-3">
@@ -93,7 +95,7 @@ MLP · TensorFlow MNIST
                             <option value="{{ l }}" {% if params.loss == l %}selected{% endif %}>{{ l }}</option>
                             {% endfor %}
                         </select>
-                        <div class="form-text text-secondary">labels are one-hot, so sparse_categorical_crossentropy is not offered</div>
+                        <div class="form-text text-secondary small">What the model minimizes. categorical_crossentropy: for classification with softmax, punishes confident mistakes; mean_squared_error: made for regression.<br>Labels are one-hot, so sparse_categorical_crossentropy is not offered.</div>
                     </div>
 
                     <div class="row">
@@ -113,6 +115,11 @@ MLP · TensorFlow MNIST
                                    value="{{ params.validation_split }}"
                                    class="form-control bg-dark text-white border-secondary">
                         </div>
+                        <div class="col-12 mb-3">
+                            <div class="form-text text-secondary small">batch_size: images per weight update (small = more updates, slower epochs) &middot;
+                            epochs: full passes over the training set (too many = overfitting) &middot;
+                            validation_split: last part of the training set kept aside to watch overfitting; the test set stays untouched.</div>
+                        </div>
                     </div>
 
                     <div class="form-check mb-4">
@@ -121,6 +128,7 @@ MLP · TensorFlow MNIST
                         <label class="form-check-label" for="normalize">
                             Normalize pixels (divide by 255) &middot; unticked = the subject's code
                         </label>
+                        <div class="form-text text-secondary small">0&ndash;255 &rarr; 0&ndash;1: small inputs keep the gradients stable, so training is faster and better.</div>
                     </div>
 
                     <button type="submit" name="action" value="train"
@@ -140,6 +148,7 @@ MLP · TensorFlow MNIST
                             </option>
                             {% endfor %}
                         </select>
+                        <div class="form-text text-secondary small">One model is trained for each value; comparing them shows the effect of this one parameter.</div>
                     </div>
 
                     <div class="form-check mb-3">
