@@ -4,6 +4,7 @@ import base64
 import binascii
 import io
 import os
+import tempfile
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -19,6 +20,7 @@ MODEL_NAMES = {
 }
 
 _models = {}
+_stored_models = {}
 
 
 def decode_data_url(data_url):
@@ -104,6 +106,61 @@ def predict_both(pixels):
         name: dict(predict_digit(get_model(name), inputs[name]), model=MODEL_NAMES[name])
         for name in ("cnn", "mlp")
     }
+
+
+# ---------------------------------------------------------------------------
+# Models stored in the database (see services/model_store.py)
+# ---------------------------------------------------------------------------
+
+def load_from_bytes(data, filename):
+    """Keras loads from a file, so the bytes go through a temporary folder."""
+    extension = os.path.splitext(filename)[1].lower()
+    if extension not in (".h5", ".keras"):
+        raise ValueError("Only .h5 and .keras models are accepted.")
+    from tensorflow.keras.models import load_model
+    with tempfile.TemporaryDirectory() as folder:
+        path = os.path.join(folder, "model" + extension)
+        with open(path, "wb") as f:
+            f.write(data)
+        try:
+            return load_model(path, compile=False)
+        except Exception as error:
+            raise ValueError("The file is not a valid Keras model.") from error
+
+
+def check_digit_model(model):
+    """The page sends 28x28 images: the model must take 784 values and give 10 classes."""
+    if int(np.prod(model.input_shape[1:])) != 784 or model.output_shape[-1] != 10:
+        raise ValueError("The model must take 28x28 images and give 10 classes.")
+
+
+def get_stored_model(stored):
+    """Load a model from the database once and keep it in memory."""
+    if stored.id not in _stored_models:
+        # stored.data is deferred: it is only read from the database here
+        _stored_models[stored.id] = load_from_bytes(stored.data, stored.filename)
+    return _stored_models[stored.id]
+
+
+def forget_model(model_id):
+    """Remove a deleted model from the memory."""
+    _stored_models.pop(model_id, None)
+
+
+def model_input(pixels, model):
+    """Shape the pixels like the input of this model: (1, 28, 28, 1) or (1, 784)."""
+    return pixels.reshape((1,) + tuple(model.input_shape[1:])).astype("float32")
+
+
+def predict_with(pixels, stored_models):
+    """Run the prepared image through the chosen models: {name: result}."""
+    results = {}
+    for stored in stored_models:
+        model = get_stored_model(stored)
+        results[stored.name] = dict(
+            predict_digit(model, model_input(pixels, model)), model=stored.name
+        )
+    return results
 
 
 def preview_png(pixels):

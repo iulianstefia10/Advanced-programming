@@ -4,9 +4,20 @@ import os
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 from PIL import Image, UnidentifiedImageError
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import defer
 from werkzeug.utils import secure_filename
 
-from services.mnist_inference import decode_data_url, predict_both, prepare_image, preview_png
+from extensions import db
+from models.app_data import StoredModel
+from services.mnist_inference import (
+    decode_data_url,
+    forget_model,
+    predict_with,
+    prepare_image,
+    preview_png,
+)
+from services.model_store import add_model
 
 mnist_bp = Blueprint(
     "mnist",
@@ -21,10 +32,20 @@ def dashboard():
     image_data = None
     model_view = None
     filename = None
-    error = None
+    error = request.args.get("model_error")   # set by upload_model below
 
     upload_folder = os.path.join(current_app.root_path, "static", "uploads")
     os.makedirs(upload_folder, exist_ok=True)
+
+    try:
+        # defer(data): the list must not load every model file from the database
+        models = db.session.scalars(
+            db.select(StoredModel).options(defer(StoredModel.data)).order_by(StoredModel.id)
+        ).all()
+    except SQLAlchemyError:
+        db.session.rollback()
+        models = []
+        error = "The model database is unavailable."
 
     if request.method == "POST":
         try:
@@ -46,10 +67,15 @@ def dashboard():
             else:
                 raise ValueError("Draw a digit or choose an image file first.")
 
-            # the same 28x28 image goes to both models
+            # the same 28x28 image goes to every chosen model
             pixels = prepare_image(image)
             model_view = preview_png(pixels)
-            predictions = predict_both(pixels)
+
+            choice = request.form.get("model_id", "all")
+            chosen = models if choice == "all" else [m for m in models if str(m.id) == choice]
+            if not chosen:
+                raise ValueError("No model available: import one first.")
+            predictions = predict_with(pixels, chosen)
 
         except (ValueError, UnidentifiedImageError, OSError) as e:
             error = str(e) if isinstance(e, ValueError) else "The file is not a valid image."
@@ -66,8 +92,38 @@ def dashboard():
         model_view=model_view,
         filename=filename,
         uploaded_files=uploaded_files,
+        models=models,
         error=error,
     )
+
+
+@mnist_bp.route("/models/upload", methods=["POST"])
+def upload_model():
+    """Import a .h5 / .keras model and store it in the database."""
+    file = request.files.get("model_file")
+    try:
+        if file is None or file.filename == "":
+            raise ValueError("Choose a .h5 or .keras file.")
+        filename = secure_filename(file.filename)
+        name = request.form.get("name", "").strip() or os.path.splitext(filename)[0]
+        add_model(name, request.form.get("description", "").strip(), filename, file.read())
+    except ValueError as e:
+        return redirect(url_for("mnist.dashboard", model_error=str(e)))
+    except SQLAlchemyError:
+        db.session.rollback()
+        return redirect(url_for("mnist.dashboard", model_error="The database is unavailable."))
+    return redirect(url_for("mnist.dashboard"))
+
+
+@mnist_bp.route("/models/delete/<int:model_id>", methods=["POST"])
+def delete_model(model_id):
+    """Delete one model from the database."""
+    stored = db.session.get(StoredModel, model_id)
+    if stored is not None:
+        db.session.delete(stored)
+        db.session.commit()
+        forget_model(model_id)
+    return redirect(url_for("mnist.dashboard"))
 
 
 @mnist_bp.route("/delete/<path:filename>", methods=["POST"])

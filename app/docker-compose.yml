@@ -1,4 +1,3 @@
-
 services:
   flask-app:
     build:
@@ -12,21 +11,35 @@ services:
       - INFLUXDB_V2_URL=${INFLUXDB_V2_URL:-http://192.168.168.88:8086}
       - INFLUXDB_V2_ORG=${INFLUXDB_V2_ORG}
       - INFLUXDB_V2_TOKEN=${INFLUXDB_V2_TOKEN}
+      - DATABASE_URL=postgresql+psycopg2://group4:${POSTGRES_PASSWORD:-password123}@db:5432/flask_models
     volumes:
       - .:/app
     command: python app.py
     networks:
       - flask-network
     container_name: group4
+    depends_on:
+      db:
+        condition: service_healthy
 
   db:
     image: postgres:15
     environment:
       POSTGRES_USER: group4
-      POSTGRES_PASSWORD: password123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
       POSTGRES_DB: flask_models
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U group4 -d flask_models"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       - flask-network
+
+volumes:
+  pgdata:
 
 networks:
   flask-network:

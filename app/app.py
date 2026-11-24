@@ -1,8 +1,10 @@
 from flask import Flask, render_template
 from models.chinook import Artist, Album, Genre, Track, Customer, Invoice, InvoiceLine
+from models import app_data  # noqa: F401  (registers the tables of the "appdata" database)
 from influxdb_flask import InfluxDB
 import os
 from routes.landcover import landcover_bp
+from services.model_store import seed_default_models
 
 from dotenv import load_dotenv
 from extensions import db
@@ -14,8 +16,11 @@ def create_app():
 
     app = Flask(__name__)
 
+    # imported models can be big (the given CNN is a few MB)
+    app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+
     # -------------------------
-    # Database
+    # Database 1: Chinook (SQLite)
     # -------------------------
 
     basedir = os.path.abspath(
@@ -30,20 +35,43 @@ def create_app():
         )
     )
 
+    # -------------------------
+    # Database 2: our own tables ("appdata")
+    # Postgres in Docker (DATABASE_URL), a local SQLite file otherwise
+    # (tests, continuous integration, running without Docker)
+    # -------------------------
+
+    app.config["SQLALCHEMY_BINDS"] = {
+        "appdata": os.environ.get(
+            "DATABASE_URL",
+            "sqlite:///" + os.path.join(basedir, "database/appdata.db"),
+        )
+    }
+
     db.init_app(app)
 
-    # -------------------------
-    # InfluxDB
-    # -------------------------
-
     with app.app_context():
-        db.reflect()
+        # only Chinook is reflected, never the "appdata" database
+        db.reflect(bind_key=None)
 
         for table_name, table in db.metadata.tables.items():
             print(f"\nTable: {table_name}")
 
             for column in table.columns:
                 print(f"  Column: {column.name}, Type: {column.type}")
+
+        # only our own tables are created, never the Chinook ones
+        try:
+            db.create_all(bind_key="appdata")
+            # first start: the two given digit models are copied into the database
+            seed_default_models()
+        except Exception as error:  # for example Postgres is not reachable
+            db.session.rollback()
+            app.logger.warning("App database unavailable: %s", error)
+
+    # -------------------------
+    # InfluxDB
+    # -------------------------
 
     # the address can be changed in .env (the school network can change)
     app.config["INFLUXDB_V2_URL"] = os.environ.get(
@@ -68,7 +96,9 @@ def create_app():
     def home():
         return render_template("home.html")
 
-   
+    # -------------------------
+    # Pages (one blueprint each)
+    # -------------------------
 
     from routes.chinook import chinook_bp
     from routes.influxdb import influx_bp
@@ -80,7 +110,7 @@ def create_app():
     from routes.yolo import yolo_bp
     from routes.forecast import forecast_bp
     from routes.pw4 import pw4_bp
-    
+
     app.register_blueprint(cnn_bp)
     app.register_blueprint(chinook_bp)
     app.register_blueprint(influx_bp)
