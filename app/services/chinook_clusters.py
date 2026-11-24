@@ -19,6 +19,7 @@ from models.chinook import Customer, Genre, Invoice, InvoiceLine, Track
 # numbers given to K-Means. The number of invoices is shown in the tables but
 # NOT used: 58 of the 59 customers have exactly 7 invoices, so after scaling the
 # only customer with 6 invoices was far from everybody and got a cluster alone.
+# 3 ознаки для K-Means: витрати, кількість жанрів, частка улюбленого жанру
 FEATURES = ["total_spent", "n_genres", "favorite_share"]
 FEATURE_LABELS = {
     "total_spent": "Total spent ($)",
@@ -29,6 +30,7 @@ FEATURE_LABELS = {
 K_MIN, K_MAX = 2, 10
 
 
+# Для кожного клієнта: 2 запити (витрати і жанри) -> словник з ознаками
 def get_customer_features():
     """One line per customer: spending, invoices and favourite genre."""
     # total spent and number of invoices
@@ -81,12 +83,14 @@ def get_customer_features():
     return customers
 
 
+# StandardScaler: середнє 0, відхилення 1 -> всі ознаки мають однакову вагу
 def _scaled_matrix(customers):
     X = np.array([[c[f] for f in FEATURES] for c in customers], dtype=float)
     # the features have different units ($, counts, %), so they are scaled first
     return StandardScaler().fit_transform(X)
 
 
+# Інерція для k = 1..10 -> графік ліктя (лікоть = де інерція перестає швидко падати)
 def elbow_curve(customers, k_max=K_MAX, random_state=42):
     """Inertia for k = 1..k_max, to choose k with the elbow method."""
     X = _scaled_matrix(customers)
@@ -104,11 +108,13 @@ def cluster_customers(customers, k=3, random_state=42):
         raise ValueError(f"k must be between {K_MIN} and {K_MAX}")
 
     X = _scaled_matrix(customers)
+    # n_init=10: 10 стартів, береться найкращий; random_state=42: щоразу той самий результат
     labels = KMeans(n_clusters=k, n_init=10, random_state=random_state).fit_predict(X)
 
     for customer, label in zip(customers, labels):
         customer["cluster"] = int(label)
 
+    # Середні значення кожного кластера для таблиці на сторінці
     summary = []
     for cluster in range(k):
         members = [c for c in customers if c["cluster"] == cluster]
@@ -155,6 +161,7 @@ def elbow_plot(ks, inertias, k=None):
     return _to_base64(fig)
 
 
+# Точковий графік: кожен клієнт = точка, колір = кластер
 def scatter_plot(customers, x="total_spent", y="favorite_share"):
     fig, ax = _dark_axes((6, 4))
     for cluster in sorted({c["cluster"] for c in customers}):

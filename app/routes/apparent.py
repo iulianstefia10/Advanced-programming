@@ -13,6 +13,7 @@ apparent_bp = Blueprint(
 LOCATIONS = ["annecy", "aix_les_bains", "annemasse"]
 
 
+# Кнопка Use the current weather: читає InfluxDB, будь-яка помилка -> текст на сторінці
 def _current_weather(location):
     """Current weather from InfluxDB, or (None, error message)."""
     influxdb = current_app.extensions.get("influxdb")
@@ -42,10 +43,12 @@ def dashboard():
 
     if request.method == "POST":
         location = request.form.get("location", "annecy")
+        # Regex: тільки малі літери і _, до 40 символів -> захист Flux-запиту від ін'єкції
         if not re.fullmatch(r"[a-z_]{1,40}", location):
             errors.append("Unknown location.")
             location = "annecy"
 
+        # action=influx: дані з InfluxDB; інакше дані з форми
         if request.form.get("action") == "influx" and not errors:
             weather, error = _current_weather(location)
             if error:

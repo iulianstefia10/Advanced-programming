@@ -13,6 +13,7 @@ ACTIVATIONS = ["relu", "sigmoid", "tanh"]
 OPTIMIZERS = ["adam", "sgd", "rmsprop"]
 # Labels are one-hot encoded (to_categorical), so only losses that accept
 # one-hot targets are allowed. sparse_categorical_crossentropy would crash.
+# Дозволені значення форми; sparse_* немає, бо мітки one-hot
 LOSSES = ["categorical_crossentropy", "mean_squared_error"]
 
 DEFAULTS = {
@@ -64,6 +65,7 @@ _DATA_CACHE = {}
 # --------------------------------------------------------------------------
 # Validation
 # --------------------------------------------------------------------------
+# Текст '128,64,32' -> список шарів; порожньо = модель викладача без прихованих шарів
 def parse_hidden_layers(text):
     """'128,64,32' -> [128, 64, 32]; '' -> [] (no hidden layer)."""
     text = (text or "").strip()
@@ -100,6 +102,7 @@ def _int_field(form, name, errors):
     return value
 
 
+# Перевірка форми на сервері: помилки показуються на сторінці, сайт не падає
 def validate_params(form):
     """Read a dict-like form, return (params, errors).
 
@@ -151,6 +154,7 @@ def validate_params(form):
 # --------------------------------------------------------------------------
 # Data and model
 # --------------------------------------------------------------------------
+# 60 000 train + 10 000 test; картинка 28x28 -> вектор 784; мітки one-hot
 def load_mnist(normalize=True):
     """MNIST flattened to 784 values, labels one-hot. Cached in memory."""
     if "raw" not in _DATA_CACHE:
@@ -167,10 +171,12 @@ def load_mnist(normalize=True):
     X_train, y_train, X_test, y_test = _DATA_CACHE["raw"]
     if normalize:
         # Main fix vs. the teacher's code: pixels 0-255 -> 0-1.
+        # Нормалізація 0-255 -> 0-1: стабільні градієнти (0.864 -> 0.928)
         X_train, X_test = X_train / 255.0, X_test / 255.0
     return X_train, y_train, X_test, y_test
 
 
+# Мережа: вхід 784 -> Dense шари -> Dense(10, softmax) = 10 ймовірностей
 def build_model(hidden_layers, activation="relu", input_dim=784, num_classes=10):
     """Dense-only network. hidden_layers=[] reproduces the teacher's model."""
     from tensorflow.keras import Input
@@ -185,6 +191,7 @@ def build_model(hidden_layers, activation="relu", input_dim=784, num_classes=10)
     return Model(inputs=[xi], outputs=[y])  # created once (teacher did it twice)
 
 
+# Навчання: seed -> модель -> compile -> fit -> evaluate на тесті -> результат для сторінки
 def train_mlp(params, data=None, train_limit=None):
     """Train with validated params and return a JSON-friendly result dict.
 
@@ -207,6 +214,7 @@ def train_mlp(params, data=None, train_limit=None):
         input_dim=X_train.shape[1],
         num_classes=y_train.shape[1],
     )
+    # loss = що мінімізуємо, optimizer = як оновлюємо ваги
     model.compile(
         loss=params["loss"],
         optimizer=params["optimizer"],
@@ -223,6 +231,7 @@ def train_mlp(params, data=None, train_limit=None):
         validation_split=params["validation_split"],
     )
     duration = time.time() - start
+    # Тест (10 000 картинок) модель бачить тільки тут: чесна оцінка
     test_loss, test_acc = model.evaluate(X_test, y_test, verbose=0)
 
     hist = history.history
@@ -262,6 +271,7 @@ def study_configs(parameter, base=None):
     return configs
 
 
+# Sensitivity study: міняємо один параметр, решта фіксовані, одна модель на значення
 def run_sensitivity(parameter, base=None, train_limit=None, data=None, trainer=None):
     """Train one model per value of `parameter`; return table rows."""
     trainer = trainer or train_mlp

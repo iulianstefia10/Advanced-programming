@@ -9,6 +9,7 @@ def format_dataset(data, x):
 
     return X, y
 
+# Нарізає ряд на вікна: X = window годин усіх змінних, y = наступні horizon годин цілі
 def make_windows(values, target_col, window, horizon):
     """Multivariate version of format_dataset (Sessions 2-3, 7.4).
 
