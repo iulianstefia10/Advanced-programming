@@ -10,6 +10,7 @@ mlp_bp = Blueprint(
 
 # training images used by the sensitivity study (out of 60,000),
 # so one click stays under about a minute on the CPU
+# Study на 10 000 картинок, щоб один клік був < 1 хв
 STUDY_TRAIN_LIMIT = 10000
 
 
@@ -22,6 +23,7 @@ def dashboard():
     study = None
     errors = []
 
+    # POST: кнопка Train model (action=train) або Run sensitivity study (action=study)
     if request.method == "POST":
         params, errors = mlp_service.validate_params(request.form)
         study_param = request.form.get("study_param", "activation")

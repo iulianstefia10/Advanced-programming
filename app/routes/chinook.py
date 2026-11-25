@@ -29,6 +29,7 @@ from models.chinook import (
     InvoiceLine,
 )
 
+# Blueprint: усі сторінки Chinook з префіксом /chinook
 chinook_bp = Blueprint(
     "chinook",
     __name__,
@@ -41,6 +42,7 @@ def dashboard():
     return render_template("chinook_dashboard.html")
 
 
+# Кожна функція = одна сторінка: запит до бази -> список -> спільний шаблон data_list.html
 @chinook_bp.route("/artists")
 def artists():
     artist_list = Artist.query.order_by(Artist.Name).all()
@@ -109,6 +111,7 @@ def albums_per_artist():
             Artist.Name,
             func.count(Album.AlbumId).label("album_count"),
         )
+        # outerjoin = LEFT JOIN: артисти без альбомів лишаються з 0
         .outerjoin(Album, Album.ArtistId == Artist.ArtistId)
         .group_by(Artist.ArtistId, Artist.Name)
         .order_by(func.count(Album.AlbumId).desc(), Artist.Name)
@@ -131,6 +134,7 @@ def albums_per_artist():
     )
 
 
+# Топ-10 артистів за продажами: Artist -> Album -> Track -> InvoiceLine, сума ціна x кількість
 @chinook_bp.route("/popular_artists")
 def popular_artists():
     sales = func.sum(
@@ -164,6 +168,7 @@ def popular_artists():
     )
 
 
+# Топ-10 клієнтів: сума Invoice.Total по кожному клієнту
 @chinook_bp.route("/top_customers")
 def top_customers():
     spent = func.sum(Invoice.Total).label("spent")
@@ -201,6 +206,7 @@ def top_customers():
     )
 
 
+# Кількість треків у кожному жанрі + стовпчикова діаграма matplotlib
 @chinook_bp.route("/genres_stats")
 def genres_stats():
     data = (
@@ -242,6 +248,7 @@ def genres_stats():
     )
     img.seek(0)
 
+    # Графік -> PNG у пам'яті -> base64 -> вставляється в <img> без файлу
     plot_url = base64.b64encode(img.getvalue()).decode("utf-8")
     plt.close(fig)
 
@@ -262,6 +269,7 @@ def genres_stats():
     )
 
 
+# Схема бази: таблиці і стовпці через inspect(db.engine)
 @chinook_bp.route("/metadata")
 def metadata():
     inspector = inspect(db.engine)
@@ -282,6 +290,7 @@ def metadata():
     )
 
 
+# Сторінка кластерів: перевірити k (2-10), порахувати лікоть і K-Means, передати в шаблон
 @chinook_bp.route("/clusters")
 def clusters():
     error = None
@@ -292,6 +301,7 @@ def clusters():
         k = int(k)
         if not K_MIN <= k <= K_MAX:
             raise ValueError
+    # Неправильне k -> повідомлення на сторінці замість падіння
     except ValueError:
         error = f"k must be a whole number between {K_MIN} and {K_MAX}."
         k = 3

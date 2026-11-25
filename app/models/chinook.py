@@ -3,6 +3,7 @@ from sqlalchemy import Integer, String, ForeignKey, Numeric
 
 from extensions import db
 
+# Кожен клас = таблиця бази, кожен mapped_column = стовпець
 class Artist(db.Model):
     __tablename__ = 'Artist'
     ArtistId: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -13,7 +14,9 @@ class Album(db.Model):
     __tablename__ = 'Album'
     AlbumId: Mapped[int] = mapped_column(Integer, primary_key=True)
     Title: Mapped[str] = mapped_column(String(160))
+    # ForeignKey: зв'язок у самій базі (альбом -> його артист)
     ArtistId: Mapped[int] = mapped_column(Integer, ForeignKey('Artist.ArtistId'))
+    # relationship: зв'язок у Python, дає album.artist і artist.albums без ручного join
     artist = relationship('Artist', back_populates='albums')
     tracks = relationship('Track', back_populates='album')
 
@@ -56,6 +59,7 @@ class Invoice(db.Model):
     customer = relationship('Customer', back_populates='invoices')
     invoice_lines = relationship('InvoiceLine', back_populates='invoice')
 
+# Invoice = вся покупка (чек); InvoiceLine = один трек у чеку: ціна і кількість
 class InvoiceLine(db.Model):
     __tablename__ = 'InvoiceLine'
     InvoiceLineId: Mapped[int] = mapped_column(Integer, primary_key=True)

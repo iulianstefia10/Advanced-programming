@@ -26,6 +26,7 @@ BUCKETS = ["weather", "crypto", "forex"]
 
 # Preferred choices when they exist in the bucket (otherwise the first one found).
 # A list means "the first of these that exists".
+# Значення форми за замовчуванням: Annecy + 5 сусідніх станцій (< 60 км)
 PREFERRED = {
     "weather": {
         "measurement": ["weather_current"],
@@ -75,6 +76,7 @@ LEARNED = ["linear", "mlp", "lstm"]
 # --------------------------------------------------------------------------
 # 1. What is in the bucket
 # --------------------------------------------------------------------------
+# Екранує лапки і зворотні слеші -> безпечний рядок у Flux-запиті
 def flux_string(value):
     """Quote a value for a Flux query."""
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
@@ -95,6 +97,7 @@ def _values(query_api, org, flux):
     return sorted({str(r.get_value()) for t in tables for r in t.records})
 
 
+# Читає з InfluxDB, які є таблиці, станції і змінні -> списки у формі (нічого не захардкоджено)
 def discover(query_api, org, bucket, measurement=None, tag=None):
     """Measurements, tag key, tag values (stations, coins...) and fields."""
     schema = 'import "influxdata/influxdb/schema"\n'
@@ -159,6 +162,7 @@ def _getlist(form, name):
     return value if isinstance(value, list) else [value]
 
 
+# Перевірка форми: межі чисел + кожна змінна/станція має існувати в базі
 def validate(form, options):
     """Check the form against what exists in InfluxDB. Returns (params, errors)."""
     params, errors = dict(DEFAULT_PARAMS), []
@@ -209,6 +213,7 @@ def column_name(field, series):
     return f"{field} @ {series}" if series else field
 
 
+# Flux-запит: bucket, період, змінні, станції; aggregateWindow = одне значення на годину
 def build_query(options, params):
     fields = [params["target_field"]] + params["extra_fields"]
     field_filter = " or ".join(f"r._field == {flux_string(f)}" for f in fields)
@@ -228,6 +233,7 @@ def build_query(options, params):
     return "\n".join(lines)
 
 
+# Відповідь InfluxDB -> таблиця pandas: рядок = година, колонка = змінна @ станція
 def load_frame(query_api, org, options, params):
     """Hourly table: index = time (UTC), one column per variable @ station."""
     tables = query_api.query(org=org, query=build_query(options, params))
@@ -266,6 +272,7 @@ def load_frame(query_api, org, options, params):
 # --------------------------------------------------------------------------
 # 3. Windows, split, models
 # --------------------------------------------------------------------------
+# Поділ за часом: останні 20% = тест, проміжок window+horizon-1, щоб години не перетиналися
 def split_points(n_windows, window, horizon, test_share=TEST_SHARE):
     """Chronological split with a gap, so no hour is both in train and in test.
 
@@ -284,6 +291,7 @@ def split_points(n_windows, window, horizon, test_share=TEST_SHARE):
     return n_train, test_start
 
 
+# MAE = середня абсолютна помилка (у градусах/доларах), RMSE сильніше карає великі помилки
 def metrics(y_true, y_pred):
     err = np.asarray(y_pred, float) - np.asarray(y_true, float)
     return {
@@ -293,10 +301,12 @@ def metrics(y_true, y_pred):
     }
 
 
+# Baseline 1: повторює останнє відоме значення
 def predict_naive(X, horizon, target_col=0):
     return np.repeat(X[:, -1, target_col][:, None], horizon, axis=1)
 
 
+# Baseline 2: та сама година вчора
 def predict_seasonal(X, horizon, target_col=0, period=24):
     """Value of the same hour one day before (needs window >= 24 and horizon <= 24)."""
     window = X.shape[1]
@@ -304,6 +314,7 @@ def predict_seasonal(X, horizon, target_col=0, period=24):
     return X[:, idx, target_col]
 
 
+# MLP: Dense 64 -> Dropout -> Dense 32 (L2); LSTM: LSTM(32) -> Dropout; вихід = horizon годин
 def _keras_model(kind, input_shape, horizon):
     from tensorflow.keras import Input
     from tensorflow.keras.layers import LSTM, Dense, Dropout
@@ -325,6 +336,7 @@ def _keras_model(kind, input_shape, horizon):
 ALPHAS = np.logspace(-1, 5, 13)
 
 
+# Сила штрафу ridge (alpha) обирається за часом: 80% train вчить, останні 20% перевіряють
 def choose_alpha(X_train, y_train, gap):
     """Strength of the ridge regularisation, chosen BY TIME.
 
@@ -349,6 +361,7 @@ def choose_alpha(X_train, y_train, gap):
     return best
 
 
+# Навчає одну модель; для мереж EarlyStopping: стоп, якщо 5 епох немає покращення
 def train_predict(kind, X_train, y_train, X_test, epochs, gap=0):
     """Train one learned model on scaled data and predict the scaled test targets."""
     if kind == "linear":
@@ -374,6 +387,7 @@ def train_predict(kind, X_train, y_train, X_test, epochs, gap=0):
     return model.predict(X_test, verbose=0), {"epochs_run": len(history.history["loss"])}
 
 
+# Входи відносно останнього значення; від інших станцій лише останні 6 годин (менше входів = менше перенавчання)
 def model_inputs(kind, X_scaled, cols):
     """What each model reads.
 
@@ -398,6 +412,7 @@ def model_inputs(kind, X_scaled, cols):
     return np.concatenate(parts, axis=1)
 
 
+# Головна функція: вікна -> поділ -> масштаб -> 5 моделей -> таблиця і графіки
 def run_forecast(frame, params, models=None):
     """Train and compare the models. frame: first column = target."""
     models = models or [key for key, _ in MODELS]
@@ -409,6 +424,7 @@ def run_forecast(frame, params, models=None):
     n_train, test_start = split_points(len(X_all), window, horizon)
 
     # scaling fitted on the hours used by the training windows only
+    # Масштаб рахується ТІЛЬКИ на train -> немає витоку даних з майбутнього
     train_rows = values[: n_train + window + horizon - 1]
     mean = train_rows.mean(axis=0)
     std = train_rows.std(axis=0)
@@ -418,6 +434,7 @@ def run_forecast(frame, params, models=None):
     # the learned models predict the CHANGE from the last known value
     # (if they learn nothing, they give the naive forecast instead of nonsense)
     last = X_all[:, -1, 0]
+    # Моделі прогнозують ЗМІНУ від останнього значення: якщо нічого не вивчили -> naive, а не нісенітниця
     change = y - last[:, None]
     change_std = float(change[:n_train].std()) or 1.0
     change_scaled = change / change_std
@@ -439,6 +456,7 @@ def run_forecast(frame, params, models=None):
     # learned models, with all inputs and with the target only
     variants = [("all", list(range(len(columns))))]
     if len(columns) > 1:
+        # Кожна модель ще раз тільки з Annecy -> видно, чи допомагають інші станції (колонка Gain)
         variants.append(("target_only", [0]))
     for key in [k for k in LEARNED if k in models]:
         for variant, cols in variants:

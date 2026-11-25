@@ -18,6 +18,7 @@ def _query_api():
 
 @forecast_bp.route("/", methods=["GET", "POST"])
 def dashboard():
+    # Bucket тільки з білого списку: weather, crypto, forex
     bucket = request.values.get("bucket", "weather")
     if bucket not in forecast_service.BUCKETS:
         bucket = "weather"
@@ -30,6 +31,7 @@ def dashboard():
 
     try:
         query_api = _query_api()
+        # Спершу читаємо схему бази, щоб заповнити форму
         options = forecast_service.discover(
             query_api, org, bucket,
             request.values.get("measurement"), request.values.get("tag"),
@@ -45,6 +47,7 @@ def dashboard():
         errors += form_errors
         if not form_errors:
             try:
+                # Дані з InfluxDB -> навчання і порівняння 5 моделей
                 frame = forecast_service.load_frame(query_api, org, options, params)
                 result = forecast_service.run_forecast(frame, params)
             except ValueError as e:

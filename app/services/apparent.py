@@ -40,6 +40,7 @@ def f_to_c(t):
     return (t - 32) * 5 / 9
 
 
+# Heat index (NOAA): спека + волога; формула в Фаренгейтах, тому C -> F -> C
 def heat_index(t_c, rh):
     """NOAA heat index in C (formula in F, as published by the NWS)."""
     t = c_to_f(t_c)
@@ -58,12 +59,14 @@ def heat_index(t_c, rh):
     return f_to_c(hi)
 
 
+# Wind chill (Environment Canada): холод + вітер, вітер у км/год
 def wind_chill(t_c, wind_kmh):
     """Environment Canada wind chill index in C (wind in km/h at 10 m)."""
     v = wind_kmh ** 0.16
     return 13.12 + 0.6215 * t_c - 11.37 * v + 0.3965 * t_c * v
 
 
+# Steadman: усі інші випадки; e = тиск пари з вологості, вітер у м/с (/3.6)
 def steadman(t_c, rh, wind_kmh):
     """Steadman apparent temperature (shade), as used by the Australian BoM."""
     e = rh / 100 * 6.105 * math.exp(17.27 * t_c / (237.7 + t_c))  # vapour pressure, hPa
@@ -71,6 +74,7 @@ def steadman(t_c, rh, wind_kmh):
     return t_c + 0.33 * e - 0.70 * ws - 4.00
 
 
+# Перший поріг, нижче якого значення -> напис рівня (Very cold, Extreme caution...)
 def comfort(value):
     for upper, label, level in COMFORT_LEVELS:
         if value < upper:
@@ -78,9 +82,11 @@ def comfort(value):
     return COMFORT_LEVELS[-1][1:]
 
 
+# Головна функція: рахує 3 формули і вибирає дійсну
 def apparent_temperature(t_c, rh, wind_kmh):
     """Pick the model valid for these conditions and return all the details."""
     hi_valid = t_c >= 27 and rh >= 40
+    # Wind chill тільки якщо ОБИДВІ умови: T <= 10 і вітер > 4.8 км/год
     wc_valid = t_c <= 10 and wind_kmh > 4.8
 
     models = [
@@ -95,6 +101,7 @@ def apparent_temperature(t_c, rh, wind_kmh):
          "range": "any conditions (used when the others do not apply)"},
     ]
 
+    # Порядок: wind chill -> heat index -> інакше Steadman
     if wc_valid:
         chosen = models[1]
     elif hi_valid:
@@ -117,6 +124,7 @@ def apparent_temperature(t_c, rh, wind_kmh):
     }
 
 
+# Точки графіка вітру 0..60 км/год; heat index не бере вітер, тому не використовується
 def wind_curve(t_c, rh, max_wind=60, step=5):
     """Felt temperature of the same air at wind speeds 0..max_wind km/h.
 
@@ -135,6 +143,7 @@ def wind_curve(t_c, rh, max_wind=60, step=5):
     return {"model": name, "points": points}
 
 
+# Перевірка чисел форми (кома теж ок), межі з LIMITS
 def validate(form):
     """Read temperature, humidity, wind from a form. Returns (values, errors)."""
     values, errors = {}, []
@@ -168,6 +177,7 @@ FIELDS = {
 }
 
 
+# Flux-запит до InfluxDB: останні значення 4 полів для станції за добу
 def current_weather(query_api, org, location="annecy"):
     """Last value of each field for a location. Missing fields are left out."""
     names = " or ".join(f'r._field == "{f}"' for f in FIELDS.values())
